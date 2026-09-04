@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>
+      E-study app for students
+    </title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <div class="app" id="app">
+        <section class="screen home-screen active" data-screen="home">
+          <header class="home-header">
+            <p>
+              Good evening
+            </p>
+            <h1>
+              What do you want to learn?
+            </h1>
+          </header>
+          <div class="search-field">
+            <span class="search-icon">
+              ⌕
+            </span>
+            <span>
+              Search subjects or topics...
+            </span>
+          </div>
+          <section class="home-subjects">
+            <h2>
+              YOUR SUBJECTS
+            </h2>
+            <div class="subject-grid" id="home-subject-grid">
+            </div>
+          </section>
+          <div class="home-actions">
+            <button class="outline-button" data-screen-target="quiz-subjects">
+              ☑
+              <span>
+                Take a quiz
+              </span>
+            </button>
+            <button class="outline-button" data-screen-target="ai">
+              ▢
+              <span>
+                Ask AI
+              </span>
+            </button>
+          </div>
+        </section>
+        <section class="screen subjects-screen" data-screen="subjects">
+          <div class="screen-content">
+            <h1>
+              Subjects
+            </h1>
+            <p class="subtitle">
+              Choose a subject to get started
+            </p>
+            <div class="search-field compact">
+              <span class="search-icon">
+                ⌕
+              </span>
+              <span>
+                Search subjects or topics...
+              </span>
+            </div>
+            <div class="large-subject-list" id="subjects-list">
+            </div>
+          </div>
+        </section>
+        <section class="screen quiz-subjects-screen" data-screen="quiz-subjects">
+          <div class="screen-content">
+            <h1>
+              Test yourself
+            </h1>
+            <p class="subtitle">
+              Choose a subject to begin
+            </p>
+            <div class="large-subject-list" id="quiz-subjects-list">
+            </div>
+          </div>
+        </section>
+        <section class="screen quiz-topics-screen" data-screen="quiz-topics">
+          <div class="screen-content">
+            <button class="back-button" data-screen-target="quiz-subjects">
+              ‹
+              <span>
+                Subjects
+              </span>
+            </button>
+            <h1>
+              Mathematics
+            </h1>
+            <p class="subtitle">
+              Choose a topic to quiz on
+            </p>
+            <div class="large-subject-list" id="quiz-topics-list">
+            </div>
+          </div>
+        </section>
+        <section class="screen ai-screen" data-screen="ai">
+          <header class="ai-header">
+            <div class="ai-badge">
+              ▱
+            </div>
+            <div>
+              <h1>
+                AI Tutor
+              </h1>
+              <p>
+                Ask about any topic you're studying
+              </p>
+            </div>
+          </header>
+          <div class="chat-area">
+            <div class="chat-message">
+              Ask me anything about what you're studying.
+              <br>
+              <br>
+              I can help with any subject — Mathematics, Biology, Chemistry, Physics, English, Economics, Government, Geography, and more.
+            </div>
+            <p class="try-label">
+              TRY ASKING
+            </p>
+            <div class="prompt-list" id="prompt-list">
+            </div>
+          </div>
+          <div class="chat-input">
+            <span>
+              Ask about anything you're studying...
+            </span>
+            <button>
+              ➤
+            </button>
+          </div>
+        </section>
+        <section class="screen topic-list-screen" data-screen="topics">
+          <div class="topic-hero">
+            <button class="back-button" data-screen-target="subjects">
+              ‹
+              <span>
+                Subjects
+              </span>
+            </button>
+            <div class="topic-heading">
+              <span class="subject-symbol">
+                ∑
+              </span>
+              <div>
+                <h1>
+                  Mathematics
+                </h1>
+                <p>
+                  6 topics
+                </p>
+              </div>
+            </div>
+          </div>
+          <div class="search-field topic-search">
+            <span class="search-icon">
+              ⌕
+            </span>
+            <span>
+              Search topics...
+            </span>
+          </div>
+          <div class="topic-list" id="topic-list">
+          </div>
+        </section>
+        <section class="screen topic-detail-screen" data-screen="topic-detail">
+          <div class="screen-content detail-content">
+            <button class="back-button" data-screen-target="topics">
+              ‹
+              <span>
+                Subjects
+              </span>
+            </button>
+            <div id="topic-detail-content">
+            </div>
+          </div>
+        </section>
+        <section class="screen learning-screen" data-screen="learning">
+          <header class="content-header">
+            <button class="back-button" data-screen-target="topic-detail">
+              ‹
+              <span>
+                Topic
+              </span>
+            </button>
+            <p class="eyebrow purple" id="lesson-subject">
+            </p>
+            <h1>
+              Learning content
+            </h1>
+          </header>
+          <article class="lesson" id="lesson-content">
+          </article>
+          <div class="sticky-actions">
+            <button class="outline-button" data-screen-target="ai">
+              ▢
+              <span>
+                Ask AI
+              </span>
+            </button>
+            <button class="primary-button" data-screen-target="quiz-question">
+              Take quiz
+            </button>
+          </div>
+        </section>
+        <section class="screen question-screen" data-screen="quiz-question">
+          <div class="question-header">
+            <button data-screen-target="quiz-subjects">
+              ×
+            </button>
+            <strong>
+              1 / 4
+            </strong>
+            <span>
+            </span>
+            <div class="progress">
+              <i>
+              </i>
+            </div>
+            <p>
+              Mathematics · Number Bases
+            </p>
+          </div>
+          <div class="question-body">
+            <h1>
+              What is 1010₂ in base 10?
+            </h1>
+            <div class="answers" id="answers">
+            </div>
+          </div>
+          <div class="question-footer">
+            <button class="primary-button" data-screen-target="quiz-result-wrong">
+              Next question
+            </button>
+          </div>
+        </section>
+        <section class="screen result-screen" data-screen="quiz-result-wrong">
+          <div class="question-header">
+            <button data-screen-target="quiz-subjects">
+              ×
+            </button>
+            <strong>
+              1 / 4
+            </strong>
+            <span>
+            </span>
+            <div class="progress">
+              <i>
+              </i>
+            </div>
+            <p>
+              Mathematics · Number Bases
+            </p>
+          </div>
+          <div class="question-body">
+            <h1>
+              What is 1010₂ in base 10?
+            </h1>
+            <div class="answers result-answers">
+              <div class="answer wrong">
+                <b>
+                  ×
+                </b>
+                <span>
+                  8
+                </span>
+              </div>
+              <div class="answer correct">
+                <b>
+                  ✓
+                </b>
+                <span>
+                  10
+                </span>
+              </div>
+              <div class="answer muted">
+                <b>
+                  C
+                </b>
+                <span>
+                  12
+                </span>
+              </div>
+              <div class="answer muted">
+                <b>
+                  D
+                </b>
+                <span>
+                  14
+                </span>
+              </div>
+            </div>
+            <div class="feedback wrong-feedback">
+              <strong>
+                Not quite.
+              </strong>
+              <p>
+                1010₂ = (1×8) + (0×4) + (1×2) + (0×1) = 8 + 0 + 2 + 0 = 10
+              </p>
+            </div>
+          </div>
+          <div class="question-footer">
+            <button class="primary-button" data-screen-target="quiz-result-correct">
+              Next question
+            </button>
+          </div>
+        </section>
+        <section class="screen result-screen" data-screen="quiz-result-correct">
+          <div class="question-header">
+            <button data-screen-target="quiz-subjects">
+              ×
+            </button>
+            <strong>
+              1 / 4
+            </strong>
+            <span>
+            </span>
+            <div class="progress">
+              <i>
+              </i>
+            </div>
+            <p>
+              Mathematics · Number Bases
+            </p>
+          </div>
+          <div class="question-body">
+            <h1>
+              What is 1010₂ in base 10?
+            </h1>
+            <div class="answers result-answers">
+              <div class="answer muted">
+                <b>
+                  A
+                </b>
+                <span>
+                  8
+                </span>
+              </div>
+              <div class="answer correct">
+                <b>
+                  ✓
+                </b>
+                <span>
+                  10
+                </span>
+              </div>
+              <div class="answer muted">
+                <b>
+                  C
+                </b>
+                <span>
+                  12
+                </span>
+              </div>
+              <div class="answer muted">
+                <b>
+                  D
+                </b>
+                <span>
+                  14
+                </span>
+              </div>
+            </div>
+            <div class="feedback correct-feedback">
+              <strong>
+                Correct!
+              </strong>
+              <p>
+                1010₂ = (1×8) + (0×4) + (1×2) + (0×1) = 8 + 0 + 2 + 0 = 10
+              </p>
+            </div>
+          </div>
+          <div class="question-footer">
+            <button class="primary-button" data-screen-target="quiz-question">
+              Next question
+            </button>
+          </div>
+        </section>
+        <nav class="bottom-nav">
+          <button data-screen-target="home">
+            <span>
+              ⌂
+            </span>
+            Home
+          </button>
+          <button data-screen-target="subjects">
+            <span>
+              ▣
+            </span>
+            Learn
+          </button>
+          <button data-screen-target="quiz-subjects">
+            <span>
+              ☑
+            </span>
+            Quiz
+          </button>
+          <button data-screen-target="ai">
+            <span>
+              ▱
+            </span>
+            AI Tutor
+          </button>
+        </nav>
+        +
+      </div>
+    </main>
+    <script src="script.js">
+    </script>
+  </body>
+</html>

@@ -13,6 +13,8 @@ const app = express();
 app.use(express.json());
 
 let catalogCache;
+const users = new Map();
+const activeTokens = new Map();
 
 async function readCatalog() {
   if (!catalogCache) {
@@ -22,8 +24,78 @@ async function readCatalog() {
   return catalogCache;
 }
 
+function createToken(user) {
+  return `study-${user.id}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function sanitizeUser(user) {
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email
+  };
+}
+
 app.get('/api/health', (_request, response) => {
   response.json({ status: 'ok', mode: 'local-first' });
+});
+
+app.post('/api/auth/register', (request, response) => {
+  const { name, email, password } = request.body || {};
+  const trimmedName = String(name || '').trim();
+  const trimmedEmail = String(email || '').trim().toLowerCase();
+  const trimmedPassword = String(password || '');
+
+  if (!trimmedName || !trimmedEmail || !trimmedPassword) {
+    response.status(400).json({ error: 'Name, email, and password are required.' });
+    return;
+  }
+
+  if (users.has(trimmedEmail)) {
+    response.status(409).json({ error: 'An account with this email already exists.' });
+    return;
+  }
+
+  const user = {
+    id: crypto.randomUUID(),
+    name: trimmedName,
+    email: trimmedEmail,
+    password: trimmedPassword
+  };
+
+  const token = createToken(user);
+  users.set(trimmedEmail, user);
+  activeTokens.set(token, user.email);
+
+  response.status(201).json({
+    token,
+    user: sanitizeUser(user)
+  });
+});
+
+app.post('/api/auth/login', (request, response) => {
+  const { email, password } = request.body || {};
+  const trimmedEmail = String(email || '').trim().toLowerCase();
+  const trimmedPassword = String(password || '');
+
+  if (!trimmedEmail || !trimmedPassword) {
+    response.status(400).json({ error: 'Email and password are required.' });
+    return;
+  }
+
+  const user = users.get(trimmedEmail);
+  if (!user || user.password !== trimmedPassword) {
+    response.status(401).json({ error: 'Invalid email or password.' });
+    return;
+  }
+
+  const token = createToken(user);
+  activeTokens.set(token, user.email);
+
+  response.json({
+    token,
+    user: sanitizeUser(user)
+  });
 });
 
 app.get('/api/catalog', async (_request, response, next) => {

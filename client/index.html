@@ -20,7 +20,7 @@
 
           <div class="search-field">
             <span class="search-icon">⌕</span>
-            <span>Search subjects or topics...</span>
+            <input type="search" data-search-scope="home" placeholder="Search subjects or topics..." aria-label="Search subjects or topics" />
           </div>
 
           <section class="home-subjects">
@@ -30,11 +30,11 @@
 
           <div class="home-actions">
             <button class="outline-button" data-screen-target="quiz-subjects">
-              ☑
+              <img class="action-icon" src="https://www.figma.com/api/mcp/asset/326a2a76-98d5-4415-b842-571c4e003f67.svg" alt="" />
               <span>Take a quiz</span>
             </button>
             <button class="outline-button" data-screen-target="ai">
-              ▢
+              <img class="action-icon" src="https://www.figma.com/api/mcp/asset/df02f26d-78f0-4639-9e24-255cfed060a9.svg" alt="" />
               <span>Ask AI</span>
             </button>
           </div>
@@ -47,7 +47,7 @@
 
             <div class="search-field compact">
               <span class="search-icon">⌕</span>
-              <span>Search subjects or topics...</span>
+              <input type="search" data-search-scope="subjects" placeholder="Search subjects or topics..." aria-label="Search subjects or topics" />
             </div>
 
             <div class="large-subject-list" id="subjects-list"></div>
@@ -114,7 +114,7 @@
 
           <div class="search-field topic-search">
             <span class="search-icon">⌕</span>
-            <span>Search topics...</span>
+            <input type="search" data-search-scope="topics" placeholder="Search topics..." aria-label="Search topics" />
           </div>
 
           <div class="topic-list" id="topic-list"></div>
@@ -152,95 +152,73 @@
         <section class="screen question-screen" data-screen="quiz-question">
           <div class="question-header">
             <button data-screen-target="quiz-subjects">×</button>
-            <strong>1 / 4</strong>
+            <strong id="quiz-progress">1 / 10</strong>
             <span></span>
             <div class="progress"><i></i></div>
-            <p>Mathematics · Number Bases</p>
+            <p id="quiz-topic-label">Mathematics · Logic</p>
           </div>
 
           <div class="question-body">
-            <h1>What is 1010₂ in base 10?</h1>
+            <p class="quiz-encouragement" id="quiz-encouragement"></p>
+            <h1 id="quiz-question-text"></h1>
             <div class="answers" id="answers"></div>
           </div>
 
           <div class="question-footer">
-            <button class="primary-button" data-screen-target="quiz-result-wrong">Next question</button>
+            <button class="primary-button" data-screen-target="quiz-subjects">Exit quiz</button>
           </div>
         </section>
 
-        <section class="screen result-screen" data-screen="quiz-result-wrong">
+        <section class="screen result-screen" data-screen="quiz-result">
           <div class="question-header">
             <button data-screen-target="quiz-subjects">×</button>
-            <strong>1 / 4</strong>
+            <strong id="result-progress">1 / 10</strong>
             <span></span>
             <div class="progress"><i></i></div>
-            <p>Mathematics · Number Bases</p>
+            <p id="result-topic-label">Mathematics · Logic</p>
           </div>
 
           <div class="question-body">
-            <h1>What is 1010₂ in base 10?</h1>
-            <div class="answers result-answers">
-              <div class="answer wrong"><b>×</b><span>8</span></div>
-              <div class="answer correct"><b>✓</b><span>10</span></div>
-              <div class="answer muted"><b>C</b><span>12</span></div>
-              <div class="answer muted"><b>D</b><span>14</span></div>
-            </div>
+            <h1 id="result-question-text"></h1>
+            <div class="answers result-answers" id="result-answers"></div>
 
-            <div class="feedback wrong-feedback">
-              <strong>Not quite.</strong>
-              <p>1010₂ = (1×8) + (0×4) + (1×2) + (0×1) = 8 + 0 + 2 + 0 = 10</p>
+            <div class="feedback" id="quiz-feedback">
+              <strong></strong>
+              <p></p>
             </div>
           </div>
 
           <div class="question-footer">
-            <button class="primary-button" data-screen-target="quiz-result-correct">Next question</button>
+            <button class="primary-button" data-screen-target="quiz-complete">Finish quiz</button>
           </div>
         </section>
 
-        <section class="screen result-screen" data-screen="quiz-result-correct">
-          <div class="question-header">
-            <button data-screen-target="quiz-subjects">×</button>
-            <strong>1 / 4</strong>
-            <span></span>
-            <div class="progress"><i></i></div>
-            <p>Mathematics · Number Bases</p>
-          </div>
-
-          <div class="question-body">
-            <h1>What is 1010₂ in base 10?</h1>
-            <div class="answers result-answers">
-              <div class="answer muted"><b>A</b><span>8</span></div>
-              <div class="answer correct"><b>✓</b><span>10</span></div>
-              <div class="answer muted"><b>C</b><span>12</span></div>
-              <div class="answer muted"><b>D</b><span>14</span></div>
-            </div>
-
-            <div class="feedback correct-feedback">
-              <strong>Correct!</strong>
-              <p>1010₂ = (1×8) + (0×4) + (1×2) + (0×1) = 8 + 0 + 2 + 0 = 10</p>
-            </div>
-          </div>
-
-          <div class="question-footer">
-            <button class="primary-button" data-screen-target="quiz-question">Next question</button>
+        <section class="screen completion-screen" data-screen="quiz-complete">
+          <div class="completion-content">
+            <p class="eyebrow purple">QUIZ COMPLETE</p>
+            <h1>Nice work.</h1>
+            <p class="completion-summary" id="quiz-summary">You scored 0 out of 10.</p>
+            <div class="completion-score" id="quiz-score">0/10</div>
+            <button class="primary-button" data-screen-target="quiz-subjects">Take another quiz</button>
+            <button class="outline-button" data-screen-target="home">Back home</button>
           </div>
         </section>
 
         <nav class="bottom-nav">
           <button data-screen-target="home">
-            <span>⌂</span>
+            <span><img src= "https://www.figma.com/api/mcp/asset/cbb81686-cafc-4953-af22-93172ba37ca7.svg" alt="" />  </span>
             Home
           </button>
           <button data-screen-target="subjects">
-            <span>▣</span>
+            <span><img src=  "https://www.figma.com/api/mcp/asset/39147657-3952-47e3-98dd-7c6191893416.svg" /></span>
             Learn
           </button>
           <button data-screen-target="quiz-subjects">
-            <span>☑</span>
+            <span><img src= "https://www.figma.com/api/mcp/asset/176ad5bb-b1b4-4af7-b179-68456dacd4ff.svg" alt="" /></span>
             Quiz
           </button>
           <button data-screen-target="ai">
-            <span>▱</span>
+            <span><img src= "https://www.figma.com/api/mcp/asset/68429dfc-fa24-4be6-a560-2d3058b3875c.svg" alt=""  /></span>
             AI Tutor
           </button>
         </nav>

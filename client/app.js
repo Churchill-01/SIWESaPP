@@ -18,6 +18,24 @@ const prompts = ['Explain photosynthesis simply', 'How do I solve quadratic equa
 const screenAliases = { learn: 'subjects', quiz: 'quiz-subjects' };
 const subjectStyles = ['math', 'biology', 'chemistry', 'physics', 'english', 'economics', 'government', 'geography'];
 const subjectIcons = ['∑', '⬡', '◈', '⚡', 'Aa', '₦', '⚖', '◎'];
+const emptySearchResult = '<p class="empty-search-result">No matches found.</p>';
+
+// Search is case-insensitive and supports partial words.
+function matches(value, query) {
+  return value.toLowerCase().includes(query.trim().toLowerCase());
+}
+
+function subjectMatches(subject, query) {
+  if (!query || matches(subject[0], query)) return true;
+
+  return state.subjectRecords.some((record) => (
+    record.subject === subject[0] && matches(record.topic, query)
+  ));
+}
+
+function filteredSubjects(query = '') {
+  return state.subjects.filter((subject) => subjectMatches(subject, query));
+}
 
 const subjectCard = ([name, count, color, icon]) => `
   <button class="subject-card ${color}" data-subject="${name}" data-screen-target="topics">
@@ -40,14 +58,52 @@ const subjectRow = ([name, count, color, icon], target) => `
   </button>
 `;
 
+const topicSearchRow = (record, index) => `
+  <button class="topic-row" data-subject="${record.subject}" data-topic="${record.topic}" data-screen-target="topic-detail">
+    <span class="topic-number">${String(index + 1).padStart(2, '0')}</span>
+    <span class="row-copy">
+      <strong>${record.topic}</strong>
+      <small>${record.subject}</small>
+    </span>
+    <span class="chevron">›</span>
+  </button>
+`;
+
+// The home screen only needs subject cards; topic matches are shown on the Subjects screen.
+function renderHomeSubjects(query = '') {
+  const subjects = filteredSubjects(query);
+  document.querySelector('#home-subject-grid').innerHTML = subjects.length
+    ? subjects.map(subjectCard).join('')
+    : emptySearchResult;
+}
+
+function renderSubjectList(query = '') {
+  const subjects = filteredSubjects(query);
+  // Show topic matches directly so users do not need to open each subject first.
+  const topicResults = query
+    ? state.subjectRecords.filter((record, index, records) => (
+      matches(record.topic, query)
+      && records.findIndex((item) => item.subject === record.subject && item.topic === record.topic) === index
+    ))
+    : [];
+  const subjectRows = query && topicResults.length
+    ? ''
+    : subjects.map((subject) => subjectRow(subject, 'topics')).join('');
+  const topicRows = topicResults.map(topicSearchRow).join('');
+
+  document.querySelector('#subjects-list').innerHTML = subjectRows || topicRows || emptySearchResult;
+}
+
 function renderSubjects() {
-  document.querySelector('#home-subject-grid').innerHTML = state.subjects.map(subjectCard).join('');
-  document.querySelector('#subjects-list').innerHTML = state.subjects.map((subject) => subjectRow(subject, 'topics')).join('');
+  renderHomeSubjects();
+  renderSubjectList();
   document.querySelector('#quiz-subjects-list').innerHTML = state.subjects.map((subject) => subjectRow(subject, 'quiz-topics')).join('');
   renderTopics();
 }
 
-function renderTopics() {
+function renderTopics(query = '') {
+  const topics = state.topics.filter((topic) => !query || matches(topic, query));
+
   document.querySelector('#quiz-topics-list').innerHTML = state.topics.map((topic, index) => `
     <button class="topic-row" data-topic="${topic}" data-screen-target="quiz-question">
       <span class="topic-number">${String(index + 1).padStart(2, '0')}</span>
@@ -59,16 +115,16 @@ function renderTopics() {
     </button>
   `).join('');
 
-  document.querySelector('#topic-list').innerHTML = state.topics.map((topic, index) => `
+  document.querySelector('#topic-list').innerHTML = topics.length ? topics.map((topic) => `
     <button class="topic-row" data-topic="${topic}" data-screen-target="topic-detail">
-      <span class="topic-number">${String(index + 1).padStart(2, '0')}</span>
+      <span class="topic-number">${String(state.topics.indexOf(topic) + 1).padStart(2, '0')}</span>
       <span class="row-copy">
         <strong>${topic}</strong>
         <small>${state.subjectRecords.find((record) => record.subject === state.selectedSubject && record.topic === topic)?.lesson?.introduction || 'Course content and practice questions'}</small>
       </span>
       <span class="chevron">›</span>
     </button>
-  `).join('');
+  `).join('') : emptySearchResult;
 
   const heading = document.querySelector('.topic-heading h1');
   const summary = document.querySelector('.topic-heading p');
@@ -118,19 +174,95 @@ function renderLesson() {
   `;
 }
 
-function attachQuizOptions() {
-  const answers = document.querySelector('#answers');
-  if (!answers) return;
+function normalizeAnswer(value) {
+  return String(value || '').trim().toLowerCase().replace(/[.?!]+$/, '');
+}
 
-  answers.innerHTML = [['A', '8'], ['B', '10'], ['C', '12'], ['D', '14']]
-    .map(([letter, value]) => `<button class="answer" data-answer="${value}"><b>${letter}</b><span>${value}</span></button>`)
-    .join('');
+function currentQuizQuestion() {
+  return state.quizQuestions[state.quizIndex];
+}
+
+function updateQuizHeader(prefix, total) {
+  const questionNumber = state.quizIndex + 1;
+  const progress = document.querySelector(`#${prefix}-progress`);
+  const label = document.querySelector(`#${prefix}-topic-label`);
+  const bar = document.querySelector(`[data-screen="${prefix === 'quiz' ? 'quiz-question' : 'quiz-result'}"] .progress i`);
+
+  if (progress) progress.textContent = `${questionNumber} / ${total}`;
+  if (label) label.textContent = `${state.selectedSubject} · ${state.selectedTopic}`;
+  if (bar) bar.style.width = `${(questionNumber / total) * 100}%`;
+}
+
+function renderQuizQuestion() {
+  const question = currentQuizQuestion();
+  if (!question) return;
+
+  updateQuizHeader('quiz', state.quizQuestions.length);
+  document.querySelector('#quiz-question-text').textContent = question.question;
+  document.querySelector('#quiz-encouragement').textContent = state.quizIndex === 4
+    ? 'You are halfway through. Keep going, you are doing well!'
+    : '';
+  document.querySelector('#answers').innerHTML = question.options.map((option, index) => `
+    <button class="answer" data-answer-index="${index}">
+      <b>${String.fromCharCode(65 + index)}</b><span>${option.label}</span>
+    </button>
+  `).join('');
+}
+
+function renderQuizResult(selectedIndex) {
+  const question = currentQuizQuestion();
+  const correctIndex = question.options.findIndex((option) => (
+    option.is_correct || normalizeAnswer(option.label) === normalizeAnswer(question.answer)
+  ));
+  const isCorrect = selectedIndex === correctIndex;
+  const answers = document.querySelector('#result-answers');
+  const feedback = document.querySelector('#quiz-feedback');
+
+  updateQuizHeader('result', state.quizQuestions.length);
+  document.querySelector('#result-question-text').textContent = question.question;
+  answers.innerHTML = question.options.map((option, index) => {
+    const className = index === correctIndex ? 'correct' : index === selectedIndex ? 'wrong' : 'muted';
+    const marker = index === correctIndex ? '✓' : index === selectedIndex ? '×' : String.fromCharCode(65 + index);
+    return `<div class="answer ${className}"><b>${marker}</b><span>${option.label}</span></div>`;
+  }).join('');
+
+  feedback.className = `feedback ${isCorrect ? 'correct-feedback' : 'wrong-feedback'}`;
+  feedback.querySelector('strong').textContent = isCorrect ? 'Correct!' : 'Not quite.';
+  feedback.querySelector('p').textContent = question.explanation || `The correct answer is ${question.answer}.`;
+
+  const nextButton = document.querySelector('[data-screen="quiz-result"] .question-footer .primary-button');
+  nextButton.textContent = state.quizIndex === state.quizQuestions.length - 1 ? 'See results' : 'Next question';
+  nextButton.dataset.screenTarget = state.quizIndex === state.quizQuestions.length - 1 ? 'quiz-complete' : 'quiz-next';
+}
+
+function startQuiz() {
+  const record = state.subjectRecords.find((item) => (
+    item.subject === state.selectedSubject && item.topic === state.selectedTopic
+  ));
+  state.quizQuestions = (record?.practice_questions || []).slice(0, 10);
+  state.quizIndex = 0;
+  state.quizScore = 0;
+  renderQuizQuestion();
+}
+
+function advanceQuiz() {
+  state.quizIndex += 1;
+  renderQuizQuestion();
+  activateScreen('quiz-question');
 }
 
 function renderPromptList() {
   const list = document.querySelector('#prompt-list');
   if (!list) return;
   list.innerHTML = prompts.map((prompt) => `<button class="prompt" data-prompt="${prompt}">${prompt}</button>`).join('');
+}
+
+function renderQuizComplete() {
+  const score = document.querySelector('#quiz-score');
+  const summary = document.querySelector('#quiz-summary');
+  const total = state.quizQuestions.length || 10;
+  if (score) score.textContent = `${state.quizScore}/${total}`;
+  if (summary) summary.textContent = `You scored ${state.quizScore} out of ${total}.`;
 }
 
 function activateScreen(target) {
@@ -206,13 +338,27 @@ function onRouteClick(event) {
     renderLesson();
   }
 
+  if (route.dataset.screenTarget === 'quiz-question') startQuiz();
+  if (route.dataset.screenTarget === 'quiz-next') {
+    advanceQuiz();
+    return;
+  }
+  if (route.dataset.screenTarget === 'quiz-complete') renderQuizComplete();
+
   activateScreen(route.dataset.screenTarget);
 }
 
 function onAnswerClick(event) {
-  const answer = event.target.closest('[data-answer]');
+  const answer = event.target.closest('[data-answer-index]');
   if (!answer) return;
-  activateScreen(answer.dataset.answer === '10' ? 'quiz-result-correct' : 'quiz-result-wrong');
+  const selectedIndex = Number(answer.dataset.answerIndex);
+  const question = currentQuizQuestion();
+  const correctIndex = question.options.findIndex((option) => (
+    option.is_correct || normalizeAnswer(option.label) === normalizeAnswer(question.answer)
+  ));
+  if (selectedIndex === correctIndex) state.quizScore += 1;
+  renderQuizResult(selectedIndex);
+  activateScreen('quiz-result');
 }
 
 function onPromptClick(event) {
@@ -224,6 +370,15 @@ function onPromptClick(event) {
   activateScreen('ai');
 }
 
+function onSearchInput(event) {
+  const input = event.target.closest('[data-search-scope]');
+  if (!input) return;
+
+  if (input.dataset.searchScope === 'home') renderHomeSubjects(input.value);
+  if (input.dataset.searchScope === 'subjects') renderSubjectList(input.value);
+  if (input.dataset.searchScope === 'topics') renderTopics(input.value);
+}
+
 function initializeApp() {
   state.subjects = fallbackSubjects;
   state.topics = fallbackTopics;
@@ -232,13 +387,13 @@ function initializeApp() {
 
   renderSubjects();
   renderPromptList();
-  attachQuizOptions();
 
   document.addEventListener('click', (event) => {
     onRouteClick(event);
     onAnswerClick(event);
     onPromptClick(event);
   });
+  document.addEventListener('input', onSearchInput);
 
   document.querySelectorAll('.screen').forEach((screen) => screen.classList.remove('active'));
   activateScreen('home');

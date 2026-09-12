@@ -4,5 +4,8 @@ export const state = {
   topics: [],
   selectedSubject: 'Mathematics',
   selectedTopic: 'Logic',
-  authToken: null
+  authToken: null,
+  quizScore: 0,
+  quizIndex: 0,
+  quizQuestions: []
 };

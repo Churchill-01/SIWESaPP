@@ -113,6 +113,28 @@ p {
   line-height: 1;
 }
 
+.search-field input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+}
+
+.search-field input::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
+
+.empty-search-result {
+  padding: 20px;
+  color: var(--muted);
+  font-size: 14px;
+  text-align: center;
+}
+
 .home-subjects {
   padding: 24px 20px 0;
 }
@@ -550,7 +572,7 @@ p {
 
 .progress i {
   display: block;
-  width: 25%;
+  width: 100%;
   height: 100%;
   background: var(--purple);
 }
@@ -572,6 +594,14 @@ p {
   font-size: 28px;
   line-height: 36px;
   margin-bottom: 20px;
+}
+
+.quiz-encouragement {
+  min-height: 24px;
+  margin-bottom: 8px;
+  color: #146c43;
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .answers {
@@ -631,6 +661,41 @@ p {
   left: 20px;
   right: 20px;
   bottom: 18px;
+}
+
+.completion-content {
+  min-height: 100%;
+  padding: 112px 20px 90px;
+  text-align: center;
+}
+
+.completion-content h1 {
+  margin-top: 12px;
+  font-size: 32px;
+  font-weight: 500;
+}
+
+.completion-summary {
+  margin-top: 8px;
+  color: var(--muted);
+}
+
+.completion-score {
+  margin: 40px auto;
+  width: 148px;
+  height: 148px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #dfe3ff;
+  color: var(--blue);
+  font-size: 36px;
+  font-weight: 600;
+}
+
+.completion-content .outline-button {
+  width: 100%;
+  margin-top: 12px;
 }
 
 .feedback {
@@ -729,5 +794,152 @@ p {
   .topic-row {
     gap: 12px;
     padding: 14px;
+  }
+}
+
+/* Figma screen geometry and palette */
+:root {
+  --bg: #f8fafc;
+  --ink: #101828;
+  --body: #364153;
+  --muted: #6a7282;
+  --line: #e5e7eb;
+  --purple: #5b5fef;
+  --blue: #2563eb;
+}
+
+body { background: #fff; }
+.app { background: var(--bg); }
+.screen { transform: translateX(8px); }
+.screen.active { transform: none; }
+.home-screen { padding: 40px 20px 84px; }
+.home-header h1, .screen-content > h1 { color: var(--blue); font-weight: 500; }
+.home-header p { color: var(--muted); font-weight: 500; }
+.search-field { margin-top: 24px; padding-left: 40px; border-width: 1.4px; }
+.search-icon { left: 14px; font-size: 19px; }
+.home-subjects { margin-top: 24px; }
+.subject-card { justify-content: center; }
+.subject-card:nth-child(n + 5) { display: none; }
+.subject-card.math { background: #dfe3ff; }
+.subject-card.biology { background: #8ffbc8; }
+.subject-card.chemistry { background: rgba(255, 190, 88, .84); }
+.subject-card.physics { background: #ffaeae; }
+.subject-card .subject-copy { margin-top: 7px; gap: 1px; }
+.subject-card .subject-copy strong { font-weight: 500; }
+.home-actions { position: absolute; left: 20px; right: 20px; bottom: 95px; margin: 0; }
+.outline-button, .primary-button { border-radius: 16px; }
+.primary-button { background: var(--blue); }
+.screen-content { padding-top: 40px; }
+.large-subject-row, .topic-row { min-height: 80px; padding: 16px; gap: 16px; border-width: 1.4px; border-color: #f3f4f6; background: #fff; }
+.row-icon { width: 48px; height: 48px; border-radius: 12px; }
+.large-subject-row .row-copy strong, .topic-row .row-copy strong { font-weight: 500; }
+.large-subject-row .row-copy small, .topic-row .row-copy small { font-size: 14px; line-height: 20px; }
+.topic-hero { padding: 40px 20px 16px; background: #fff; border-bottom: 1.4px solid #f3f4f6; }
+.topic-heading { margin-top: 24px; }
+.topic-heading h1 { color: var(--blue); font-weight: 500; }
+.topic-search { margin: 20px; }
+.topic-list { padding: 0 20px 90px; }
+.topic-row { min-height: 72px; }
+.topic-row .topic-number { background: transparent; color: #cbd1db; }
+.back-button { color: var(--muted); font-weight: 600; }
+.detail-content h1 { margin-top: 24px; font-weight: 500; }
+.description { margin-top: 4px; color: var(--muted); font-size: 15px; line-height: 24px; }
+.detail-content > .primary-button { margin-top: 48px; }
+.detail-actions { margin: 20px 0 0; }
+.about-box, .questions { margin-top: 36px; }
+.about-box ul { margin-top: 12px; padding-left: 32px; color: var(--body); line-height: 28px; font-size: 15px; }
+.about-box li::marker { color: var(--purple); }
+.questions { margin-top: 32px; }
+.question-link { height: 47px; margin-top: 8px; padding: 0 16px; display: flex; align-items: center; justify-content: space-between; background: #fff; border: 1.4px solid var(--line); border-radius: 12px; color: var(--body); font-size: 14px; }
+.question-link::after { content: '›'; color: var(--purple); font-size: 24px; }
+.content-header { padding: 40px 20px 16px; background: #fff; border-bottom: 1.4px solid #f3f4f6; }
+.content-header .back-button { margin-bottom: 18px; }
+.content-header h1 { margin-top: 2px; color: var(--ink); font-size: 20px; font-weight: 500; }
+.lesson { padding: 20px; }
+.lesson h2 { margin: 8px 0 16px; font-size: 18px; font-weight: 500; }
+.lesson p, .lesson li { color: var(--body); font-size: 15px; line-height: 24px; }
+.formula { margin: 16px 0; padding: 12px 16px; background: #fffbeb; border: 1.4px solid #fee685; border-radius: 12px; }
+.formula strong { color: #e17100; }
+.formula p { margin-top: 6px; white-space: pre-line; font-family: Consolas, monospace; font-size: 14px; line-height: 23px; }
+.steps { list-style: none; padding-left: 0 !important; }
+.steps li { position: relative; padding-left: 38px; margin-bottom: 12px; }
+.steps li::before { content: counter(list-item); position: absolute; left: 0; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; background: var(--purple); color: #fff; font-size: 12px; }
+.sticky-actions { bottom: 67px; padding: 16px 20px; background: rgba(255,255,255,.95); border-top: 1.4px solid #f3f4f6; }
+.ai-header { padding: 40px 20px 16px; background: #fff; border-bottom: 1.4px solid #f3f4f6; }
+.ai-badge { background: var(--blue); }
+.chat-area { padding: 20px; }
+.chat-message { margin-left: 36px; padding: 14px 16px; background: #fff; border: 1.4px solid #f3f4f6; border-radius: 14px; font-size: 15px; line-height: 23px; }
+.prompt-list { gap: 8px; margin-top: 8px; }
+.prompt { padding: 10px 12px; border-radius: 12px; background: #eef0ff; color: var(--blue); }
+.chat-input { left: 20px; right: 20px; bottom: 82px; height: 50px; border-width: 1.4px; }
+.chat-input button { background: #b8b8ff; }
+.question-header { padding: 40px 20px 20px; background: #fff; border-bottom: 1.4px solid #f3f4f6; }
+.question-header p { color: #99a1af; }
+.question-body { padding: 20px; }
+.question-body h1 { font-size: 18px; line-height: 28px; font-weight: 500; }
+.answers { display: grid; gap: 12px; }
+.answer { min-height: 56px; border-width: 1.4px; border-radius: 12px; }
+.answer b { width: 24px; height: 24px; border-width: 1.4px; }
+.answer.correct { background: #effdf5; border-color: #00d66f; color: #08783f; }
+.answer.wrong { background: #fff1f1; border-color: #ff4d55; color: #bd0000; }
+.answer.muted { color: #9aa4b2; }
+.feedback { margin-top: 20px; padding: 12px 16px; border-radius: 12px; font-size: 14px; line-height: 24px; }
+.wrong-feedback { background: #fffbeb; border: 1.4px solid #fcd34d; }
+.correct-feedback { background: #effdf5; border: 1.4px solid #9af2bf; }
+.question-footer { bottom: 82px; }
+
+/* Keep the bottom navigation light while giving the active destination focus. */
+.bottom-nav {
+  border-top: 1.4px solid rgba(243, 244, 246, 0.9);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 -8px 24px rgba(20, 33, 61, 0.06);
+  backdrop-filter: blur(12px);
+}
+.bottom-nav button {
+  position: relative;
+  color: #b4bdc9;
+  font-size: 10px;
+  font-weight: 600;
+  transition: color 180ms ease;
+}
+.bottom-nav button::before {
+  content: "";
+  position: absolute;
+  top: 7px;
+  width: 34px;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--blue);
+  opacity: 0;
+  transform: scaleX(0.4);
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+.bottom-nav button.active { color: #14213d; }
+.bottom-nav button.active::before {
+  opacity: 1;
+  transform: scaleX(1);
+}
+.bottom-nav button > span {
+  transition: transform 180ms ease;
+}
+.bottom-nav button.active > span {
+  transform: translateY(-2px);
+}
+.bottom-nav button > span {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  line-height: 0;
+}
+.bottom-nav button > span img { width: 22px; height: 22px; display: block; }
+.action-icon { width: 18px; height: 18px; margin-right: 8px; vertical-align: -4px; }
+
+/* Preserve the same active states without motion for accessibility. */
+@media (prefers-reduced-motion: reduce) {
+  .bottom-nav button,
+  .bottom-nav button::before,
+  .bottom-nav button > span {
+    transition: none;
   }
 }

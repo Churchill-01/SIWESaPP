@@ -1,5 +1,9 @@
 import express from 'express';
+import Database from 'better-sqlite3';
+import { mkdirSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
+import { promisify } from 'node:util';
+import { randomBytes, randomUUID, scrypt, timingSafeEqual } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -7,14 +11,33 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, '..');
 const clientRoot = path.join(projectRoot, 'client');
 const catalogPath = path.join(projectRoot, 'subjects.json');
+const dataRoot = path.join(projectRoot, 'data');
+const databasePath = process.env.DATABASE_PATH || path.join(dataRoot, 'study.sqlite');
 const port = Number(process.env.PORT || 3000);
+const scryptAsync = promisify(scrypt);
 
 const app = express();
 app.use(express.json());
 
 let catalogCache;
-const users = new Map();
-const activeTokens = new Map();
+mkdirSync(path.dirname(databasePath), { recursive: true });
+const database = new Database(databasePath);
+database.pragma('journal_mode = WAL');
+database.exec(`
+  CREATE TABLE IF NOT EXISTS users (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    email TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS sessions (
+    token TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+`);
 
 async function readCatalog() {
   if (!catalogCache) {
@@ -24,8 +47,8 @@ async function readCatalog() {
   return catalogCache;
 }
 
-function createToken(user) {
-  return `study-${user.id}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+function createToken() {
+  return randomBytes(32).toString('hex');
 }
 
 function sanitizeUser(user) {
@@ -36,11 +59,32 @@ function sanitizeUser(user) {
   };
 }
 
+async function hashPassword(password) {
+  const salt = randomBytes(16).toString('hex');
+  const derivedKey = await scryptAsync(password, salt, 64);
+  return `${salt}:${derivedKey.toString('hex')}`;
+}
+
+async function verifyPassword(password, storedHash) {
+  const [salt, key] = storedHash.split(':');
+  if (!salt || !key) return false;
+
+  const derivedKey = await scryptAsync(password, salt, 64);
+  const storedKey = Buffer.from(key, 'hex');
+  return storedKey.length === derivedKey.length && timingSafeEqual(storedKey, derivedKey);
+}
+
+function createSession(user) {
+  const token = createToken();
+  database.prepare('INSERT INTO sessions (token, user_id) VALUES (?, ?)').run(token, user.id);
+  return token;
+}
+
 app.get('/api/health', (_request, response) => {
   response.json({ status: 'ok', mode: 'local-first' });
 });
 
-app.post('/api/auth/register', (request, response) => {
+app.post('/api/auth/register', async (request, response, next) => {
   const { name, email, password } = request.body || {};
   const trimmedName = String(name || '').trim();
   const trimmedEmail = String(email || '').trim().toLowerCase();
@@ -51,29 +95,33 @@ app.post('/api/auth/register', (request, response) => {
     return;
   }
 
-  if (users.has(trimmedEmail)) {
+  const existingUser = database.prepare('SELECT id FROM users WHERE email = ?').get(trimmedEmail);
+  if (existingUser) {
     response.status(409).json({ error: 'An account with this email already exists.' });
     return;
   }
 
-  const user = {
-    id: crypto.randomUUID(),
-    name: trimmedName,
-    email: trimmedEmail,
-    password: trimmedPassword
-  };
+  try {
+    const user = {
+      id: randomUUID(),
+      name: trimmedName,
+      email: trimmedEmail
+    };
+    const passwordHash = await hashPassword(trimmedPassword);
+    database.prepare(
+      'INSERT INTO users (id, name, email, password_hash) VALUES (?, ?, ?, ?)'
+    ).run(user.id, user.name, user.email, passwordHash);
 
-  const token = createToken(user);
-  users.set(trimmedEmail, user);
-  activeTokens.set(token, user.email);
-
-  response.status(201).json({
-    token,
-    user: sanitizeUser(user)
-  });
+    response.status(201).json({
+      token: createSession(user),
+      user: sanitizeUser(user)
+    });
+  } catch (error) {
+    next(error);
+  }
 });
 
-app.post('/api/auth/login', (request, response) => {
+app.post('/api/auth/login', async (request, response, next) => {
   const { email, password } = request.body || {};
   const trimmedEmail = String(email || '').trim().toLowerCase();
   const trimmedPassword = String(password || '');
@@ -83,19 +131,24 @@ app.post('/api/auth/login', (request, response) => {
     return;
   }
 
-  const user = users.get(trimmedEmail);
-  if (!user || user.password !== trimmedPassword) {
-    response.status(401).json({ error: 'Invalid email or password.' });
-    return;
+  try {
+    const user = database.prepare(
+      'SELECT id, name, email, password_hash FROM users WHERE email = ?'
+    ).get(trimmedEmail);
+    const passwordMatches = user && await verifyPassword(trimmedPassword, user.password_hash);
+
+    if (!passwordMatches) {
+      response.status(401).json({ error: 'Invalid email or password.' });
+      return;
+    }
+
+    response.json({
+      token: createSession(user),
+      user: sanitizeUser(user)
+    });
+  } catch (error) {
+    next(error);
   }
-
-  const token = createToken(user);
-  activeTokens.set(token, user.email);
-
-  response.json({
-    token,
-    user: sanitizeUser(user)
-  });
 });
 
 app.get('/api/catalog', async (_request, response, next) => {

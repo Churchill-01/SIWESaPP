@@ -1,7 +1,9 @@
-import { requestJson } from './utils/api.js';
-import { getToken } from './utils/auth.js';
+import { registerUser, requestJson } from './utils/api.js';
+import { getToken, saveToken } from './utils/auth.js';
 import { state } from './utils/state.js';
+import { generateAiTutorResponse } from './utils/ai.js';
 
+// Offline fallback catalog used before the server catalog is available.
 const fallbackSubjects = [
   ['Mathematics', '6 topics', 'math', '∑'],
   ['Biology', '5 topics', 'biology', '⬡'],
@@ -13,11 +15,14 @@ const fallbackSubjects = [
   ['Geography', '4 topics', 'geography', '◎']
 ];
 
+// Offline fallback topics and suggested AI prompts.
 const fallbackTopics = ['Number Bases', 'Algebraic Expressions', 'Linear Equations', 'Quadratic Equations', 'Geometry', 'Statistics'];
 const prompts = ['Explain photosynthesis simply', 'How do I solve quadratic equations?', 'What is the difference between acids and bases?', "Help me understand Nigeria's constitution"];
+// Navigation aliases and visual metadata used while rendering subjects.
 const screenAliases = { learn: 'subjects', quiz: 'quiz-subjects' };
 const subjectStyles = ['math', 'biology', 'chemistry', 'physics', 'english', 'economics', 'government', 'geography'];
 const subjectIcons = ['∑', '⬡', '◈', '⚡', 'Aa', '₦', '⚖', '◎'];
+// Shared empty-state markup for searches with no matching records.
 const emptySearchResult = '<p class="empty-search-result">No matches found.</p>';
 
 // Search is case-insensitive and supports partial words.
@@ -26,6 +31,7 @@ function matches(value, query) {
 }
 
 function subjectMatches(subject, query) {
+  // Match a subject directly or match one of its topics.
   if (!query || matches(subject[0], query)) return true;
 
   return state.subjectRecords.some((record) => (
@@ -34,9 +40,11 @@ function subjectMatches(subject, query) {
 }
 
 function filteredSubjects(query = '') {
+  // Return subjects that satisfy the current search query.
   return state.subjects.filter((subject) => subjectMatches(subject, query));
 }
 
+// Build the compact subject card used on the home screen.
 const subjectCard = ([name, count, color, icon]) => `
   <button class="subject-card ${color}" data-subject="${name}" data-screen-target="topics">
     <span class="subject-icon">${icon}</span>
@@ -47,6 +55,7 @@ const subjectCard = ([name, count, color, icon]) => `
   </button>
 `;
 
+// Build a full-width subject row for catalog and quiz selection screens.
 const subjectRow = ([name, count, color, icon], target) => `
   <button class="large-subject-row" data-subject="${name}" data-screen-target="${target}">
     <span class="row-icon ${color}">${icon}</span>
@@ -58,6 +67,7 @@ const subjectRow = ([name, count, color, icon], target) => `
   </button>
 `;
 
+// Build a topic result row for subject search results.
 const topicSearchRow = (record, index) => `
   <button class="topic-row" data-subject="${record.subject}" data-topic="${record.topic}" data-screen-target="topic-detail">
     <span class="topic-number">${String(index + 1).padStart(2, '0')}</span>
@@ -78,6 +88,7 @@ function renderHomeSubjects(query = '') {
 }
 
 function renderSubjectList(query = '') {
+  // Render subject rows and direct topic matches for the catalog search.
   const subjects = filteredSubjects(query);
   // Show topic matches directly so users do not need to open each subject first.
   const topicResults = query
@@ -95,6 +106,7 @@ function renderSubjectList(query = '') {
 }
 
 function renderSubjects() {
+  // Refresh every subject-driven view after catalog data changes.
   renderHomeSubjects();
   renderSubjectList();
   document.querySelector('#quiz-subjects-list').innerHTML = state.subjects.map((subject) => subjectRow(subject, 'quiz-topics')).join('');
@@ -102,6 +114,7 @@ function renderSubjects() {
 }
 
 function renderTopics(query = '') {
+  // Render topic choices for both learning and quiz flows.
   const topics = state.topics.filter((topic) => !query || matches(topic, query));
 
   document.querySelector('#quiz-topics-list').innerHTML = state.topics.map((topic, index) => `
@@ -134,6 +147,7 @@ function renderTopics(query = '') {
 }
 
 function renderLesson() {
+  // Fill the topic detail and lesson screens from the selected record.
   const record = state.subjectRecords.find((item) => item.subject === state.selectedSubject && item.topic === state.selectedTopic);
   if (!record) return;
 
@@ -175,14 +189,17 @@ function renderLesson() {
 }
 
 function normalizeAnswer(value) {
+  // Normalize answer text before comparing generated and stored answers.
   return String(value || '').trim().toLowerCase().replace(/[.?!]+$/, '');
 }
 
 function currentQuizQuestion() {
+  // Return the question currently being answered or reviewed.
   return state.quizQuestions[state.quizIndex];
 }
 
 function updateQuizHeader(prefix, total) {
+  // Keep progress text, topic label, and progress bar in sync.
   const questionNumber = state.quizIndex + 1;
   const progress = document.querySelector(`#${prefix}-progress`);
   const label = document.querySelector(`#${prefix}-topic-label`);
@@ -194,6 +211,7 @@ function updateQuizHeader(prefix, total) {
 }
 
 function renderQuizQuestion() {
+  // Display the current question and its selectable answers.
   const question = currentQuizQuestion();
   if (!question) return;
 
@@ -210,6 +228,7 @@ function renderQuizQuestion() {
 }
 
 function renderQuizResult(selectedIndex) {
+  // Show the selected answer, correct answer, and explanatory feedback.
   const question = currentQuizQuestion();
   const correctIndex = question.options.findIndex((option) => (
     option.is_correct || normalizeAnswer(option.label) === normalizeAnswer(question.answer)
@@ -236,6 +255,7 @@ function renderQuizResult(selectedIndex) {
 }
 
 function startQuiz() {
+  // Reset quiz state and load up to ten practice questions for the topic.
   const record = state.subjectRecords.find((item) => (
     item.subject === state.selectedSubject && item.topic === state.selectedTopic
   ));
@@ -246,18 +266,73 @@ function startQuiz() {
 }
 
 function advanceQuiz() {
+  // Move to the next question and return to the question screen.
   state.quizIndex += 1;
   renderQuizQuestion();
   activateScreen('quiz-question');
 }
 
 function renderPromptList() {
+  // Render the reusable AI prompt suggestions.
   const list = document.querySelector('#prompt-list');
   if (!list) return;
   list.innerHTML = prompts.map((prompt) => `<button class="prompt" data-prompt="${prompt}">${prompt}</button>`).join('');
 }
 
+function renderAiChat(question, answer) {
+  const chatArea = document.querySelector('.chat-area');
+  if (!chatArea) return;
+
+  const messages = chatArea.querySelectorAll('.chat-message');
+  const container = document.querySelector('#ai-chat-log');
+
+  if (!container) {
+    const newContainer = document.createElement('div');
+    newContainer.id = 'ai-chat-log';
+    newContainer.className = 'chat-log';
+    chatArea.prepend(newContainer);
+  }
+
+  const log = document.querySelector('#ai-chat-log');
+  if (!log) return;
+
+  const questionNode = document.createElement('div');
+  questionNode.className = 'chat-message user-message';
+  questionNode.textContent = question;
+
+  const answerNode = document.createElement('div');
+  answerNode.className = 'chat-message ai-message';
+  answerNode.innerHTML = `<strong>AI Tutor:</strong><br>${answer}`;
+
+  log.append(questionNode, answerNode);
+
+  const currentPromptList = document.querySelector('#prompt-list');
+  if (currentPromptList) currentPromptList.style.display = 'none';
+
+  const label = document.querySelector('.try-label');
+  if (label) label.textContent = 'RECENT ANSWER';
+}
+
+function askAiTutor() {
+  const input = document.querySelector('.chat-input span');
+  const placeholder = 'Ask about anything you\'re studying...';
+  const rawPrompt = input ? input.textContent.trim() : '';
+  const promptText = rawPrompt && rawPrompt !== placeholder ? rawPrompt : 'Explain this topic in a simple way for a high school student';
+  const question = promptText;
+
+  const answer = generateAiTutorResponse(question, state.selectedSubject, state.selectedTopic, state.subjectRecords);
+  renderAiChat(question, answer);
+
+  if (input) {
+    input.textContent = '';
+    input.dataset.placeholder = placeholder;
+  }
+
+  activateScreen('ai');
+}
+
 function renderQuizComplete() {
+  // Update the final score and summary after the last question.
   const score = document.querySelector('#quiz-score');
   const summary = document.querySelector('#quiz-summary');
   const total = state.quizQuestions.length || 10;
@@ -266,6 +341,7 @@ function renderQuizComplete() {
 }
 
 function activateScreen(target) {
+  // Toggle screen visibility, navigation state, and signup navigation rules.
   const resolved = screenAliases[target] || target;
 
   document.querySelectorAll('.screen').forEach((screen) => {
@@ -276,9 +352,13 @@ function activateScreen(target) {
     const isActive = button.dataset.screenTarget === resolved || (resolved === 'topics' && button.dataset.screenTarget === 'subjects');
     button.classList.toggle('active', isActive);
   });
+
+  const bottomNav = document.querySelector('.bottom-nav');
+  if (bottomNav) bottomNav.classList.toggle('is-hidden', resolved === 'signup');
 }
 
 function loadCatalog() {
+  // Load the live catalog, falling back to the cached catalog on failure.
   const catalogPath = '/api/catalog';
 
   requestJson(catalogPath)
@@ -297,6 +377,7 @@ function loadCatalog() {
 }
 
 function loadCachedCatalog() {
+  // Load the bundled JSON catalog when the API cannot be reached.
   const catalogPath = window.location.pathname.includes('/client/') ? '../subjects.json' : 'subjects.json';
 
   fetch(catalogPath)
@@ -321,6 +402,7 @@ function loadCachedCatalog() {
 }
 
 function onRouteClick(event) {
+  // Handle delegated navigation clicks and update selected content.
   const route = event.target.closest('[data-screen-target]');
   if (!route) return;
 
@@ -349,6 +431,7 @@ function onRouteClick(event) {
 }
 
 function onAnswerClick(event) {
+  // Score the selected answer and show its result screen.
   const answer = event.target.closest('[data-answer-index]');
   if (!answer) return;
   const selectedIndex = Number(answer.dataset.answerIndex);
@@ -362,6 +445,7 @@ function onAnswerClick(event) {
 }
 
 function onPromptClick(event) {
+  // Place a suggested question in the AI input and open the tutor.
   const prompt = event.target.closest('[data-prompt]');
   if (!prompt) return;
 
@@ -370,7 +454,54 @@ function onPromptClick(event) {
   activateScreen('ai');
 }
 
+function onAiSubmit(event) {
+  const button = event.target.closest('.chat-input button');
+  if (!button) return;
+
+  askAiTutor();
+}
+
+async function onSignupSubmit(event) {
+  // Validate, submit, and persist a newly created account session.
+  const form = event.target.closest('#signup-form');
+  if (!form) return;
+
+  event.preventDefault();
+  const submitButton = form.querySelector('button[type="submit"]');
+  const message = form.querySelector('#signup-message');
+  const formData = new FormData(form);
+  const name = String(formData.get('name') || '').trim();
+  const email = String(formData.get('email') || '').trim();
+  const password = String(formData.get('password') || '');
+
+  message.textContent = '';
+  message.className = 'form-message';
+  submitButton.disabled = true;
+  submitButton.textContent = 'Creating account...';
+
+  try {
+    const result = await registerUser(name, email, password);
+    saveToken(result.token);
+    state.authToken = result.token;
+    form.reset();
+    activateScreen('home');
+  } catch (error) {
+    let errorMessage = 'We could not create your account. Please try again.';
+    try {
+      errorMessage = JSON.parse(error.message).error || errorMessage;
+    } catch {
+      if (error.message) errorMessage = error.message;
+    }
+    message.textContent = errorMessage;
+    message.className = 'form-message error';
+  } finally {
+    submitButton.disabled = false;
+    submitButton.textContent = 'Create account';
+  }
+}
+
 function onSearchInput(event) {
+  // Route each search field to the renderer for its screen.
   const input = event.target.closest('[data-search-scope]');
   if (!input) return;
 
@@ -380,6 +511,7 @@ function onSearchInput(event) {
 }
 
 function initializeApp() {
+  // Set initial state, register delegated events, and start data loading.
   state.subjects = fallbackSubjects;
   state.topics = fallbackTopics;
   state.selectedSubject = 'Mathematics';
@@ -392,7 +524,20 @@ function initializeApp() {
     onRouteClick(event);
     onAnswerClick(event);
     onPromptClick(event);
+    onAiSubmit(event);
   });
+
+  document.addEventListener('keydown', (event) => {
+    const input = event.target.closest('.chat-input span');
+    if (!input) return;
+
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      askAiTutor();
+    }
+  });
+
+  document.addEventListener('submit', onSignupSubmit);
   document.addEventListener('input', onSearchInput);
 
   document.querySelectorAll('.screen').forEach((screen) => screen.classList.remove('active'));

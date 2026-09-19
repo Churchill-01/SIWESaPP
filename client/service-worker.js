@@ -1,3 +1,4 @@
+// Cache identifier and static files required to start the app offline.
 const CACHE_NAME = 'study-app-v1';
 const APP_SHELL = [
   './',
@@ -10,15 +11,18 @@ const APP_SHELL = [
   '../subjects.json'
 ];
 
+// Pre-cache the application shell during installation.
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)));
   self.skipWaiting();
 });
 
+// Allow the new worker to control open pages immediately.
 self.addEventListener('activate', (event) => {
   event.waitUntil(self.clients.claim());
 });
 
+// Prefer the network and refresh the cache, falling back to cached content.
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 

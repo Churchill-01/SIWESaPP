@@ -14,6 +14,19 @@ npm start
 
 Open http://localhost:3000.
 
+### SQLite database
+
+User accounts and login sessions are stored in `data/study.sqlite`. The database is created automatically when the server starts, and passwords are stored as secure `scrypt` hashes.
+
+To use another database location, set `DATABASE_PATH` before starting the server:
+
+```powershell
+$env:DATABASE_PATH = 'D:\persistent-data\study.sqlite'
+npm start
+```
+
+For hosting, configure `DATABASE_PATH` to a mounted persistent disk. Without persistent storage, the database will be lost when the host recreates the service.
+
 ### Local-first behavior
 
 - `GET /api/catalog` serves the complete local catalog.

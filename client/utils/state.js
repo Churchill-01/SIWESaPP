@@ -1,3 +1,4 @@
+// Shared in-memory state used by the screen renderers and event handlers.
 export const state = {
   subjects: [],
   subjectRecords: [],

@@ -1,3 +1,4 @@
+/* Core design tokens shared by the application. */
 :root {
   --bg: #a1bcd6;
   --white: #fff;
@@ -12,6 +13,7 @@
   --yellow: #fffbeb;
 }
 
+/* Global box sizing, typography, and page defaults. */
 * {
   box-sizing: border-box;
 }
@@ -35,6 +37,7 @@ button {
   cursor: pointer;
 }
 
+/* Reset default heading and paragraph spacing. */
 h1,
 h2,
 h3,
@@ -42,6 +45,7 @@ p {
   margin: 0;
 }
 
+/* Center the fixed-size app shell in the browser viewport. */
 .app-shell {
   width: 100%;
   min-height: 100dvh;
@@ -58,6 +62,7 @@ p {
   background: var(--bg);
 }
 
+/* Screen stacking and transition rules for the single-page interface. */
 .screen {
   position: absolute;
   inset: 0;
@@ -76,6 +81,7 @@ p {
   z-index: 2 !important;
 }
 
+/* Home header, greeting, and account link. */
 .home-header {
   padding: 42px 20px 0;
 }
@@ -87,12 +93,29 @@ p {
   color: #6a7282;
 }
 
+.home-greeting {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.auth-link {
+  border: 0;
+  padding: 4px 0;
+  background: transparent;
+  color: var(--blue);
+  font-size: 12px;
+  font-weight: 600;
+}
+
 .home-header h1 {
   font-size: 24px;
   line-height: 32px;
   letter-spacing: -0.5px;
 }
 
+/* Search input and empty-result presentation. */
 .search-field {
   height: 47px;
   margin: 26px 20px 0;
@@ -135,6 +158,7 @@ p {
   text-align: center;
 }
 
+/* Home subject grid and subject card labels. */
 .home-subjects {
   padding: 24px 20px 0;
 }
@@ -157,6 +181,7 @@ p {
   margin-top: 12px;
 }
 
+/* Subject card color variants and content layout. */
 .subject-card,
 .large-subject-row,
 .topic-row,
@@ -246,6 +271,7 @@ p {
   color: #364153;
 }
 
+/* Quick action buttons below the home subject grid. */
 .home-actions,
 .detail-actions {
   display: grid;
@@ -262,6 +288,11 @@ p {
   font-weight: 600;
 }
 
+.primary-button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
 .outline-button {
   background: #fff;
   border: 1px solid var(--line);
@@ -274,6 +305,7 @@ p {
   width: 100%;
 }
 
+/* Shared screen content and signup layout. */
 .screen-content {
   padding: 40px 20px 90px;
 }
@@ -283,6 +315,102 @@ p {
   line-height: 32px;
 }
 
+.signup-content {
+  padding-top: 28px;
+}
+
+/* Signup form fields, validation message, and helper text. */
+.signup-intro {
+  margin-top: 48px;
+}
+
+.signup-mark {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 24px;
+  border-radius: 16px;
+  background: #dfe3ff;
+  color: var(--blue);
+  font-size: 24px;
+}
+
+.signup-intro h1 {
+  margin-top: 8px;
+  color: var(--blue);
+  font-size: 26px;
+  line-height: 34px;
+  font-weight: 500;
+}
+
+.signup-intro .subtitle {
+  max-width: 300px;
+  margin-top: 8px;
+  line-height: 22px;
+}
+
+.signup-form {
+  display: grid;
+  gap: 16px;
+  margin-top: 32px;
+}
+
+.form-field {
+  display: grid;
+  gap: 7px;
+  color: var(--body);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.form-field input {
+  width: 100%;
+  height: 50px;
+  padding: 0 15px;
+  border: 1.4px solid var(--line);
+  border-radius: 14px;
+  outline: 0;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.form-field input::placeholder {
+  color: var(--muted);
+}
+
+.form-field input:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.form-message {
+  min-height: 20px;
+  color: #b42318;
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.form-message:not(.error) {
+  visibility: hidden;
+}
+
+.signup-submit {
+  margin-top: -2px;
+}
+
+.signup-footnote {
+  margin-top: 20px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 18px;
+  text-align: center;
+}
+
+/* Full-width catalog rows and reusable row content. */
 .compact {
   margin: 20px 0 0;
 }
@@ -321,6 +449,7 @@ p {
   font-weight: 700;
 }
 
+/* Subject icon color variants and row chevrons. */
 .row-icon {
   width: 42px;
   height: 42px;
@@ -346,6 +475,7 @@ p {
   color: #6a7282;
 }
 
+/* Topic hero, heading, and topic search layout. */
 .topic-row .topic-number {
   width: 38px;
   height: 38px;
@@ -358,6 +488,7 @@ p {
   color: var(--purple);
 }
 
+/* AI tutor header, chat content, prompts, and input dock. */
 .topic-hero {
   padding: 32px 20px 16px;
 }
@@ -444,6 +575,13 @@ p {
   padding: 24px 20px 0;
 }
 
+.chat-log {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
 .chat-message {
   background: rgba(255, 255, 255, 0.8);
   border: 1px solid var(--line);
@@ -452,6 +590,20 @@ p {
   color: #364153;
   line-height: 1.6;
   font-size: 14px;
+}
+
+.user-message {
+  background: #eef2ff;
+  border-color: #dfe5ff;
+  align-self: flex-end;
+  max-width: 85%;
+}
+
+.ai-message {
+  background: #f9fafb;
+  border-color: #edf1f5;
+  align-self: flex-start;
+  max-width: 92%;
 }
 
 .prompt-list {
@@ -503,6 +655,7 @@ p {
   border: none;
 }
 
+/* Lesson content, formulas, and topic detail panels. */
 .lesson {
   padding: 20px;
 }
@@ -545,6 +698,7 @@ p {
   color: #4d5c73;
 }
 
+/* Quiz header, progress bar, question body, and answer states. */
 .question-header {
   padding: 24px 20px 0;
   justify-content: space-between;
@@ -663,6 +817,7 @@ p {
   bottom: 18px;
 }
 
+/* Quiz completion screen and result feedback. */
 .completion-content {
   min-height: 100%;
   padding: 112px 20px 90px;
@@ -715,6 +870,7 @@ p {
   color: #a03236;
 }
 
+/* Persistent bottom navigation and shared navigation controls. */
 .bottom-nav {
   position: absolute;
   left: 0;
@@ -743,6 +899,11 @@ p {
   color: var(--purple);
 }
 
+.bottom-nav.is-hidden {
+  display: none;
+}
+
+/* Shared typography, focus styles, and responsive adjustments. */
 .back-button {
   display: inline-flex;
   align-items: center;
@@ -772,6 +933,8 @@ p {
 .outline-button:focus-visible,
 .primary-button:focus-visible,
 .back-button:focus-visible,
+.auth-link:focus-visible,
+.form-field input:focus-visible,
 .bottom-nav button:focus-visible {
   outline: 3px solid rgba(91, 95, 239, 0.35);
   outline-offset: 2px;
@@ -797,7 +960,7 @@ p {
   }
 }
 
-/* Figma screen geometry and palette */
+/* Final visual overrides for the Figma-inspired screen geometry and palette. */
 :root {
   --bg: #f8fafc;
   --ink: #101828;
@@ -808,6 +971,7 @@ p {
   --blue: #2563eb;
 }
 
+/* Final layout, color, and spacing refinements for the app screens. */
 body { background: #fff; }
 .app { background: var(--bg); }
 .screen { transform: translateX(8px); }

@@ -1,6 +1,7 @@
 <!doctype html>
 <html lang="en">
   <head>
+    <!-- Document metadata and external resources. -->
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>E-study app for students</title>
@@ -10,11 +11,16 @@
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
+    <!-- Main mobile-sized application viewport. -->
     <main class="app-shell">
       <div class="app" id="app">
+        <!-- Home dashboard with search, subject cards, and quick actions. -->
         <section class="screen home-screen active" data-screen="home">
           <header class="home-header">
-            <p>Good evening</p>
+            <div class="home-greeting">
+              <p>Good evening</p>
+              <button class="auth-link" data-screen-target="signup">Create account</button>
+            </div>
             <h1>What do you want to learn?</h1>
           </header>
 
@@ -40,6 +46,40 @@
           </div>
         </section>
 
+        <!-- Account creation form. -->
+        <section class="screen signup-screen" data-screen="signup">
+          <div class="screen-content signup-content">
+            <button class="back-button" data-screen-target="home">‹ <span>Home</span></button>
+
+            <div class="signup-intro">
+              <div class="signup-mark">✦</div>
+              <p class="eyebrow purple">WELCOME TO STUDY</p>
+              <h1>Create your account</h1>
+              <p class="subtitle">Save your progress and make learning feel like yours.</p>
+            </div>
+
+            <form class="signup-form" id="signup-form">
+              <label class="form-field">
+                <span>Your name</span>
+                <input name="name" type="text" autocomplete="name" placeholder="Enter your name" required />
+              </label>
+              <label class="form-field">
+                <span>Email address</span>
+                <input name="email" type="email" autocomplete="email" placeholder="you@example.com" required />
+              </label>
+              <label class="form-field">
+                <span>Password</span>
+                <input name="password" type="password" autocomplete="new-password" minlength="6" placeholder="At least 6 characters" required />
+              </label>
+              <p class="form-message" id="signup-message" role="alert"></p>
+              <button class="primary-button signup-submit" type="submit">Create account</button>
+            </form>
+
+            <p class="signup-footnote">Your account is stored securely and stays with you.</p>
+          </div>
+        </section>
+
+        <!-- Complete subject catalog with subject and topic search. -->
         <section class="screen subjects-screen" data-screen="subjects">
           <div class="screen-content">
             <h1>Subjects</h1>
@@ -54,6 +94,7 @@
           </div>
         </section>
 
+        <!-- Quiz subject selection screen. -->
         <section class="screen quiz-subjects-screen" data-screen="quiz-subjects">
           <div class="screen-content">
             <h1>Test yourself</h1>
@@ -62,6 +103,7 @@
           </div>
         </section>
 
+        <!-- Quiz topic selection screen. -->
         <section class="screen quiz-topics-screen" data-screen="quiz-topics">
           <div class="screen-content">
             <button class="back-button" data-screen-target="quiz-subjects">
@@ -73,6 +115,7 @@
           </div>
         </section>
 
+        <!-- AI tutor prompt area. -->
         <section class="screen ai-screen" data-screen="ai">
           <header class="ai-header">
             <div class="ai-badge">▱</div>
@@ -93,11 +136,12 @@
           </div>
 
           <div class="chat-input">
-            <span>Ask about anything you're studying...</span>
-            <button>➤</button>
+            <span contenteditable="true" role="textbox" tabindex="0">Ask about anything you're studying...</span>
+            <button type="button" aria-label="Ask the AI tutor">➤</button>
           </div>
         </section>
 
+        <!-- Topic list for the currently selected subject. -->
         <section class="screen topic-list-screen" data-screen="topics">
           <div class="topic-hero">
             <button class="back-button" data-screen-target="subjects">
@@ -120,6 +164,7 @@
           <div class="topic-list" id="topic-list"></div>
         </section>
 
+        <!-- Selected topic overview and learning actions. -->
         <section class="screen topic-detail-screen" data-screen="topic-detail">
           <div class="screen-content detail-content">
             <button class="back-button" data-screen-target="topics">
@@ -129,6 +174,7 @@
           </div>
         </section>
 
+        <!-- Full lesson content for the selected topic. -->
         <section class="screen learning-screen" data-screen="learning">
           <header class="content-header">
             <button class="back-button" data-screen-target="topic-detail">
@@ -149,6 +195,7 @@
           </div>
         </section>
 
+        <!-- Active quiz question and answer choices. -->
         <section class="screen question-screen" data-screen="quiz-question">
           <div class="question-header">
             <button data-screen-target="quiz-subjects">×</button>
@@ -169,6 +216,7 @@
           </div>
         </section>
 
+        <!-- Answer review and explanation after each quiz question. -->
         <section class="screen result-screen" data-screen="quiz-result">
           <div class="question-header">
             <button data-screen-target="quiz-subjects">×</button>
@@ -193,6 +241,7 @@
           </div>
         </section>
 
+        <!-- Final quiz score and next actions. -->
         <section class="screen completion-screen" data-screen="quiz-complete">
           <div class="completion-content">
             <p class="eyebrow purple">QUIZ COMPLETE</p>
@@ -204,6 +253,7 @@
           </div>
         </section>
 
+        <!-- Persistent primary navigation between app areas. -->
         <nav class="bottom-nav">
           <button data-screen-target="home">
             <span><img src= "https://www.figma.com/api/mcp/asset/cbb81686-cafc-4953-af22-93172ba37ca7.svg" alt="" />  </span>
@@ -225,6 +275,7 @@
       </div>
     </main>
 
+    <!-- Load the application controller after the page markup is available. -->
     <script type="module" src="./app.js"></script>
   </body>
 </html>

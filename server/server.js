@@ -42,7 +42,7 @@ app.use(express.json());
 
 let catalogCache;
 // Ensure the database directory exists before opening SQLite.
-mkdirSync(path.dirname(databasePath), { recursive: true });
+fs.mkdirSync('/var/data/uploads', { recursive: true });
 const database = new Database(databasePath);
 database.pragma('journal_mode = WAL');
 // Create the user and session tables on first launch.

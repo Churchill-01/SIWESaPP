@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>SIWES Study App - Welcome</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <div class="app auth-page-app">
+        <div class="auth-page-container">
+          <!-- Brand Hero Header -->
+          <header class="auth-brand-hero">
+            <div class="auth-brand-logo">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m12 3 1.5 5.5L19 10l-5.5 1.5L12 17l-1.5-5.5L5 10l5.5-1.5L12 3Z"></path>
+              </svg>
+            </div>
+            <h1 class="auth-brand-title">SIWES Study</h1>
+            <p class="auth-brand-subtitle">Your personal secondary school study companion & offline AI tutor</p>
+          </header>
+
+          <!-- Status Message Banner (e.g. for Signed Out notices) -->
+          <div id="auth-status-banner" class="auth-status-banner" style="display: none;"></div>
+
+          <!-- Segmented Tab Switcher: Create Account vs Log In -->
+          <div class="auth-tabs" role="tablist" aria-label="Authentication modes">
+            <button type="button" class="auth-tab-btn active" id="tab-signup-btn" data-auth-tab="signup" role="tab" aria-selected="true">
+              Create Account
+            </button>
+            <button type="button" class="auth-tab-btn" id="tab-login-btn" data-auth-tab="login" role="tab" aria-selected="false">
+              Log In
+            </button>
+          </div>
+
+          <div class="auth-forms-wrapper">
+            <!-- Create Account Panel -->
+            <div class="auth-form-panel active" id="panel-signup">
+              <div class="auth-panel-heading">
+                <h2>Join as a new student</h2>
+                <p>Track your quiz scores, save topics, and learn faster.</p>
+              </div>
+
+              <form class="signup-form" id="signup-form">
+                <label class="form-field">
+                  <span>Full name</span>
+                  <input name="name" type="text" autocomplete="name" placeholder="Enter your full name" required />
+                </label>
+                <label class="form-field">
+                  <span>Email address</span>
+                  <input name="email" type="email" autocomplete="email" placeholder="you@example.com" required />
+                </label>
+                <label class="form-field">
+                  <span>Password</span>
+                  <input name="password" type="password" autocomplete="new-password" minlength="6" placeholder="At least 6 characters" required />
+                </label>
+                <p class="form-message" id="signup-message" role="alert"></p>
+                <button class="primary-button signup-submit" type="submit">Create account</button>
+              </form>
+            </div>
+
+            <!-- Log In Panel -->
+            <div class="auth-form-panel" id="panel-login">
+              <div class="auth-panel-heading">
+                <h2>Welcome back</h2>
+                <p>Log in to access your saved progress and quizzes.</p>
+              </div>
+
+              <form class="signup-form" id="login-form">
+                <label class="form-field">
+                  <span>Email address</span>
+                  <input name="email" type="email" autocomplete="email" placeholder="you@example.com" required />
+                </label>
+                <label class="form-field">
+                  <span>Password</span>
+                  <input name="password" type="password" autocomplete="current-password" placeholder="Enter your password" required />
+                </label>
+                <p class="form-message" id="login-message" role="alert"></p>
+                <button class="primary-button signup-submit" type="submit">Log in</button>
+              </form>
+            </div>
+          </div>
+
+          <!-- Guest Explore Action for First-time Users -->
+          <footer class="auth-guest-section">
+            <button type="button" class="auth-guest-btn" id="guest-continue-btn">
+              <span>Explore without an account (Continue as Guest)</span>
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
+            </button>
+            <p class="auth-privacy-note">You can create an account or sign in anytime later from the Home screen.</p>
+          </footer>
+        </div>
+      </div>
+    </main>
+
+    <script type="module" src="./auth.js"></script>
+  </body>
+</html>

@@ -6,7 +6,10 @@ export const state = {
   selectedSubject: 'Mathematics',
   selectedTopic: 'Logic',
   authToken: null,
+  user: null,
+  userProgress: [],
   quizScore: 0,
   quizIndex: 0,
-  quizQuestions: []
+  quizQuestions: [],
+  tutorContext: null
 };

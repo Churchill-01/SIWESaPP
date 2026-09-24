@@ -1,3 +1,5 @@
+import { getAuthHeaders } from './auth.js';
+
 // Local API origin used when the client is opened from a file or preview server.
 const localApiOrigin = 'http://localhost:3000';
 
@@ -11,18 +13,27 @@ function apiUrl(path) {
 }
 
 export async function requestJson(url, options = {}) {
-  // Send JSON requests and normalize JSON or text responses for callers.
+  // Send JSON requests, automatically attaching auth headers when present.
+  const authHeaders = getAuthHeaders();
   const response = await fetch(apiUrl(url), {
     headers: {
       'Content-Type': 'application/json',
+      ...authHeaders,
       ...(options.headers || {})
     },
     ...options
   });
 
   if (!response.ok) {
-    const error = await response.text();
-    throw new Error(error || 'Request failed');
+    const errorText = await response.text();
+    let message = errorText;
+    try {
+      const parsed = JSON.parse(errorText);
+      message = parsed.error || message;
+    } catch {
+      // Keep errorText
+    }
+    throw new Error(message || 'Request failed');
   }
 
   return response.headers.get('content-type')?.includes('application/json') ? response.json() : response.text();
@@ -46,5 +57,30 @@ export async function registerUser(name, email, password) {
   return requestJson('/api/auth/register', {
     method: 'POST',
     body: JSON.stringify({ name, email, password })
+  });
+}
+
+export async function logoutUser() {
+  // Terminate the active session on the backend.
+  return requestJson('/api/auth/logout', {
+    method: 'POST'
+  });
+}
+
+export async function fetchCurrentUser() {
+  // Retrieve the profile of the currently logged-in user.
+  return requestJson('/api/auth/me');
+}
+
+export async function fetchProgress() {
+  // Retrieve user quiz progress records.
+  return requestJson('/api/progress');
+}
+
+export async function saveProgress(subject, topic, score, total) {
+  // Persist a student's quiz score to the server.
+  return requestJson('/api/progress', {
+    method: 'POST',
+    body: JSON.stringify({ subject, topic, score, total })
   });
 }

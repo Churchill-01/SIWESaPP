@@ -32,7 +32,6 @@ export function findLessonRecord(subject, topic, records = [], prompt = '') {
   const promptLower = String(prompt || '').toLowerCase().trim();
   const promptKeywords = extractKeywords(promptLower);
 
-  // If prompt contains topic/subject keywords, find the best matching record
   if (promptKeywords.length) {
     let bestRecord = null;
     let bestScore = 0;
@@ -44,14 +43,12 @@ export function findLessonRecord(subject, topic, records = [], prompt = '') {
 
       let score = 0;
 
-      // Direct phrase matching
       if (promptLower.includes(recTopic)) score += 60;
       for (const st of subtopics) {
         if (promptLower.includes(st)) score += 45;
       }
       if (promptLower.includes(recSubject)) score += 30;
 
-      // Keyword matching
       for (const kw of promptKeywords) {
         if (recTopic.includes(kw)) score += 18;
         for (const st of subtopics) {
@@ -67,7 +64,6 @@ export function findLessonRecord(subject, topic, records = [], prompt = '') {
         }
       }
 
-      // Context affinity
       if (subject && record.subject === subject) score += 5;
       if (topic && record.topic === topic) score += 8;
 
@@ -82,7 +78,6 @@ export function findLessonRecord(subject, topic, records = [], prompt = '') {
     }
   }
 
-  // Fall back to currently active subject & topic
   const exact = safeRecords.find((r) => r.subject === subject && r.topic === topic);
   if (exact) return exact;
 
@@ -158,7 +153,7 @@ function findRelevantChunks(record, promptKeywords, maxChunks = 2) {
   return relevant.length ? relevant.slice(0, maxChunks) : candidates.slice(0, maxChunks);
 }
 
-export function generateAiTutorResponse(prompt, subject, topic, records = []) {
+export function generateTutorResponse(prompt, subject, topic, records = []) {
   const cleanPrompt = cleanSentence(prompt);
   const record = findLessonRecord(subject, topic, records, cleanPrompt);
 
@@ -180,12 +175,10 @@ export function generateAiTutorResponse(prompt, subject, topic, records = []) {
   const promptKeywords = extractKeywords(cleanPrompt);
   const intent = detectIntent(cleanPrompt);
 
-  // 1. GREETING
   if (intent === 'greeting') {
     return `Hello! I am your AI Study Tutor.\n\nWe are currently exploring **${curTopic}** in **${curSubject}**.\n\nHere are some things you can ask me:\n• "Explain ${curTopic} simply"\n• "Give me a worked example"\n• "Quiz me on this topic"\n• "What are common exam mistakes?"\n\nWhat would you like to learn today?`;
   }
 
-  // 2. QUIZ / TEST ME
   if (intent === 'quiz') {
     if (practiceQuestions.length) {
       const q = practiceQuestions[Math.floor(Math.random() * practiceQuestions.length)];
@@ -195,7 +188,6 @@ export function generateAiTutorResponse(prompt, subject, topic, records = []) {
     return `In **${curTopic}**, a great self-test is to state the main definition from memory, write down the fundamental formulas, and explain how ${keyPoints[0] || 'the main concept'} applies in practice!`;
   }
 
-  // 3. WORKED EXAMPLE / CALCULATION
   if (intent === 'example') {
     if (workedExample) {
       return `**Worked Example — ${curTopic} (${curSubject}):**\n\n${workedExample}\n\n**Study Strategy:**\n${studyTip}`;
@@ -204,7 +196,6 @@ export function generateAiTutorResponse(prompt, subject, topic, records = []) {
     return `**Example Application in ${curTopic}:**\n\n${sampleConcept}\n\nNotice how the principle is applied step-by-step to arrive at the result.`;
   }
 
-  // 4. COMMON MISTAKES
   if (intent === 'mistakes') {
     if (commonMistakes.length) {
       const mistakeList = commonMistakes.slice(0, 3).map((m, idx) => `${idx + 1}. ${m}`).join('\n');
@@ -213,12 +204,10 @@ export function generateAiTutorResponse(prompt, subject, topic, records = []) {
     return `**Key Things to Avoid in ${curTopic}:**\n\n1. Memorizing terms without understanding the underlying rule.\n2. Omitting units or conditions in numerical answers.\n3. Skipping intermediate working in calculations.\n\n**Advice:** ${studyTip}`;
   }
 
-  // 5. STUDY & REVISION TIPS
   if (intent === 'tips') {
     return `**Study Strategy for ${curTopic} (${curSubject}):**\n\n• **Core Tip:** ${studyTip}\n• **Key Concepts:** Focus on ${subtopics.slice(0, 3).join(', ') || 'the definitions and worked examples'}.\n• **Exam Approach:** First understand the rule, work through one example without looking at notes, and then solve practice questions.`;
   }
 
-  // 6. WHY IT MATTERS / REAL LIFE USE
   if (intent === 'importance') {
     if (whyItMatters) {
       return `**Why ${curTopic} Matters:**\n\n${whyItMatters}\n\nIn exams and beyond, understanding this topic builds foundational problem-solving skills for advanced science, mathematics, and technology.`;
@@ -226,21 +215,18 @@ export function generateAiTutorResponse(prompt, subject, topic, records = []) {
     return `**Significance of ${curTopic}:**\n\nThis topic is a cornerstone of ${curSubject}. Mastering it helps you recognise recurring exam patterns and understand the physical or mathematical reasons behind each question.`;
   }
 
-  // 7. FORMULAS & METHODS
   if (intent === 'formula') {
     const relevant = findRelevantChunks(record, promptKeywords, 2);
     const formulaText = relevant.length ? relevant.map((c) => `• ${c}`).join('\n\n') : (keyPoints.slice(0, 2).map((kp) => `• ${kp}`).join('\n') || lesson.core_explanation);
     return `**Key Formulas & Concepts for ${curTopic}:**\n\n${formulaText}\n\n${workedExample ? `**Sample Application:**\n${workedExample}` : `**Study Tip:** ${studyTip}`}`;
   }
 
-  // 8. COMPARISON / DISTINCTION
   if (intent === 'compare') {
     const first = keyPoints[0] || subtopics[0] || 'the primary rule';
     const second = keyPoints[1] || subtopics[1] || 'its direct application';
     return `**Key Distinction in ${curTopic}:**\n\n• **First Element:** ${first}\n• **Second Element:** ${second}\n\nRemember: in ${curSubject}, the fundamental rule defines what is true under standard conditions, while the specific application demonstrates how it behaves in practice.`;
   }
 
-  // 9. SPECIFIC SEARCH MATCH OR DEFINITION
   const relevantChunks = findRelevantChunks(record, promptKeywords, 2);
   const matchedDetail = relevantChunks.length
     ? relevantChunks.map((c) => `• ${c}`).join('\n\n')

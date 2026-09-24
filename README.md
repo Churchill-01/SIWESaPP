@@ -37,3 +37,19 @@ For hosting, configure `DATABASE_PATH` to a mounted persistent disk. Without per
 - The service worker caches the client shell and successful GET requests for later offline use.
 
 The first visit must happen while the server is running so the browser can cache the application and materials.
+
+### Online/local AI switching
+
+The client uses `client/utils/aiController.js`. When the browser is online, it asks the server proxy at `POST /api/ai/online`. If the request times out, fails, the provider is not configured, or the device is offline, it uses the bundled local tutor automatically.
+
+Configure an OpenAI-compatible provider in the server environment without putting credentials in frontend files:
+
+```powershell
+$env:ONLINE_AI_KEY = 'your-provider-key'
+$env:ONLINE_AI_URL = 'https://api.openai.com/v1/chat/completions'
+$env:ONLINE_AI_MODEL = 'gpt-4o-mini'
+cd server
+npm start
+```
+
+`ONLINE_AI_URL` can point to another provider that supports the chat-completions request format. The proxy sends the selected lesson as curriculum context and instructs the provider not to answer beyond it.

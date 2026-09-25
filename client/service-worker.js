@@ -1,5 +1,5 @@
 // Cache identifier and static files required to start the app offline.
-const CACHE_NAME = 'study-app-v6';
+const CACHE_NAME = 'study-app-v7';
 const APP_SHELL = [
   './',
   './index.html',

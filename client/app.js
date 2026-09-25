@@ -820,6 +820,13 @@ function loadCatalog() {
         subjectIcons[index % subjectIcons.length]
       ]);
       state.topics = [...new Set(state.subjectRecords.filter((record) => record.subject === state.selectedSubject).map((record) => record.topic))];
+      if (state.topics.length === 0 && state.subjectRecords.length > 0) {
+        state.selectedSubject = state.subjectRecords[0].subject;
+        state.topics = [...new Set(state.subjectRecords.filter((record) => record.subject === state.selectedSubject).map((record) => record.topic))];
+      }
+      if (!state.topics.includes(state.selectedTopic) && state.topics.length > 0) {
+        state.selectedTopic = state.topics[0];
+      }
       renderSubjects();
     })
     .catch(() => loadCachedCatalog());
@@ -840,6 +847,13 @@ function loadCachedCatalog() {
         subjectIcons[index % subjectIcons.length]
       ]);
       state.topics = [...new Set(state.subjectRecords.filter((record) => record.subject === state.selectedSubject).map((record) => record.topic))];
+      if (state.topics.length === 0 && state.subjectRecords.length > 0) {
+        state.selectedSubject = state.subjectRecords[0].subject;
+        state.topics = [...new Set(state.subjectRecords.filter((record) => record.subject === state.selectedSubject).map((record) => record.topic))];
+      }
+      if (!state.topics.includes(state.selectedTopic) && state.topics.length > 0) {
+        state.selectedTopic = state.topics[0];
+      }
       renderSubjects();
     })
     .catch(() => {

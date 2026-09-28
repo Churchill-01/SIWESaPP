@@ -1,5 +1,5 @@
 // Cache identifier and static files required to start the app offline.
-const CACHE_NAME = 'study-app-v7';
+const CACHE_NAME = 'study-app-v11';
 const APP_SHELL = [
   './',
   './index.html',
@@ -44,8 +44,8 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(
     fetch(event.request)
       .then((response) => {
-        // Only cache valid, successful responses so we don't cache 4xx/5xx errors
-        if (response && response.ok && response.status === 200) {
+        // Only cache valid static responses; do not cache dynamic /api/ calls
+        if (response && response.ok && response.status === 200 && !event.request.url.includes('/api/')) {
           const copy = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
         }

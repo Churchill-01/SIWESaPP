@@ -114,6 +114,7 @@ function setupFormHandlers() {
   // Handle Explore as Guest
   if (guestBtn) {
     guestBtn.addEventListener('click', () => {
+      sessionStorage.setItem('study_guest_mode', 'true');
       localStorage.setItem('study_has_visited', 'true');
       window.location.replace('./index.html');
     });

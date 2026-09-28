@@ -180,9 +180,51 @@ function renderLesson() {
   const points = (lesson.key_points || []).map((point) => `<li>${point}</li>`).join('');
   const questions = (record.practice_questions || []).map((item) => `<div class="question-link"><span>${item.question}</span></div>`).join('');
 
+  function formatWorkedExampleHtml(example) {
+    if (!example) return '';
+    if (typeof example === 'string') return `<p>${example.replace(/\n/g, '<br>')}</p>`;
+    if (typeof example === 'object') {
+      let html = '';
+      if (example.problem) html += `<div style="margin-bottom: 8px;"><strong>Problem:</strong><br>${example.problem.replace(/\n/g, '<br>')}</div>`;
+      if (example.step_by_step_solution) html += `<div style="margin-bottom: 8px;"><strong>Step-by-Step Solution:</strong><br>${example.step_by_step_solution.replace(/\n/g, '<br>')}</div>`;
+      if (example.answer) html += `<div><strong>Final Answer:</strong><br>${example.answer.replace(/\n/g, '<br>')}</div>`;
+      return html;
+    }
+    return `<p>${String(example)}</p>`;
+  }
+
+  const formattedExplanation = (lesson.core_explanation || '')
+    .split(/\n\n+/)
+    .map((p) => `<p style="margin-bottom: 12px; line-height: 1.6;">${p.replace(/\n/g, '<br>')}</p>`)
+    .join('');
+
+  const diagramHtml = record.diagram ? `
+    <h2>Concept Diagram</h2>
+    <div class="formula" style="overflow-x: auto; background: rgba(0,0,0,0.03); border-radius: 8px; padding: 12px; margin: 12px 0;">
+      <strong>${record.diagram.title || 'Diagram'}</strong>
+      ${record.diagram.ascii_art ? `<pre style="font-family: monospace; font-size: 13px; line-height: 1.4; overflow-x: auto; margin: 8px 0; padding: 8px; background: rgba(0,0,0,0.04); border-radius: 4px;">${record.diagram.ascii_art}</pre>` : ''}
+      ${record.diagram.explanation ? `<p style="font-size: 13px; margin-top: 6px; color: var(--text-secondary);">${record.diagram.explanation}</p>` : ''}
+    </div>
+  ` : '';
+
+  const mistakesHtml = (record.common_mistakes || []).length ? `
+    <h2>Common Pitfalls & Exam Traps</h2>
+    <ul class="steps" style="margin-bottom: 16px;">
+      ${record.common_mistakes.map((m) => {
+        if (typeof m === 'string') return `<li>${m}</li>`;
+        if (m && typeof m === 'object') {
+          return `<li style="margin-bottom: 8px;"><strong>Pitfall:</strong> ${m.mistake || ''}<br><span style="color: var(--primary, #0284c7);"><strong>Correction:</strong> ${m.correction || ''}</span></li>`;
+        }
+        return `<li>${m}</li>`;
+      }).join('')}
+    </ul>
+  ` : '';
+
+  const workedExampleHtml = formatWorkedExampleHtml(lesson.worked_example);
+
   document.querySelector('#topic-detail-content').innerHTML = `
     <h1>${record.topic}</h1>
-    <p class="description">${lesson.introduction || ''}</p>
+    <p class="description" style="line-height: 1.6;">${lesson.introduction || ''}</p>
     <button class="primary-button" data-screen-target="learning">Start learning</button>
     <div class="detail-actions">
       <button class="outline-button" data-screen-target="ai">${icon('spark')} <span>Ask AI</span></button>
@@ -203,13 +245,15 @@ function renderLesson() {
 
   document.querySelector('#lesson-content').innerHTML = `
     <h2>${record.topic}</h2>
-    <p>${lesson.introduction || ''}</p>
-    <h2>Core explanation</h2>
-    <p>${lesson.core_explanation || ''}</p>
-    ${lesson.worked_example ? `<div class="formula"><strong>WORKED EXAMPLE</strong><p>${lesson.worked_example}</p></div>` : ''}
-    ${points ? `<h2>Key points</h2><ul class="steps">${points}</ul>` : ''}
-    ${lesson.why_it_matters ? `<h2>Why it matters</h2><p>${lesson.why_it_matters}</p>` : ''}
-    ${lesson.study_tip ? `<div class="formula"><strong>STUDY TIP</strong><p>${lesson.study_tip}</p></div>` : ''}
+    <p style="font-size: 1.05rem; line-height: 1.6; margin-bottom: 16px;">${lesson.introduction || ''}</p>
+    <h2>Core Explanation</h2>
+    ${formattedExplanation}
+    ${diagramHtml}
+    ${workedExampleHtml ? `<div class="formula" style="margin: 16px 0;"><strong>WORKED EXAMPLE</strong>${workedExampleHtml}</div>` : ''}
+    ${points ? `<h2>Key Points</h2><ul class="steps">${points}</ul>` : ''}
+    ${mistakesHtml}
+    ${lesson.why_it_matters ? `<h2>Why It Matters</h2><p style="line-height: 1.6;">${lesson.why_it_matters}</p>` : ''}
+    ${lesson.study_tip ? `<div class="formula" style="margin-top: 16px;"><strong>STUDY TIP</strong><p>${lesson.study_tip}</p></div>` : ''}
   `;
 }
 
@@ -808,7 +852,7 @@ function updateAuthUi() {
 
 function loadCatalog() {
   // Load the live catalog, falling back to the cached catalog on failure.
-  const catalogPath = '/api/catalog';
+  const catalogPath = `/api/catalog?t=${Date.now()}`;
 
   requestJson(catalogPath)
     .then((catalog) => {
@@ -834,7 +878,7 @@ function loadCatalog() {
 
 function loadCachedCatalog() {
   // Load the bundled JSON catalog when the API cannot be reached.
-  const catalogPath = '/subjects.json';
+  const catalogPath = `/subjects.json?t=${Date.now()}`;
 
   fetch(catalogPath)
     .then((response) => (response.ok ? response.json() : Promise.reject(new Error('Cached catalog unavailable'))))
@@ -871,6 +915,7 @@ async function handleLogout() {
     // Continue local cleanup even if offline
   }
   clearAuth();
+  sessionStorage.removeItem('study_guest_mode');
   state.authToken = null;
   state.user = null;
   state.userProgress = [];
@@ -1071,12 +1116,11 @@ function checkFirstTimeUser() {
     clearAuth();
   }
 
-  const hasVisited = localStorage.getItem('study_has_visited');
   const token = getToken();
+  const isGuest = sessionStorage.getItem('study_guest_mode') === 'true';
 
-  // If first-time user (has not visited before and has no active login session),
-  // open the dedicated auth page:
-  if (!hasVisited && !token) {
+  // If user is not logged in and not in active guest mode, start on the sign up screen:
+  if (!token && !isGuest) {
     window.location.replace('./auth.html');
     return false;
   }

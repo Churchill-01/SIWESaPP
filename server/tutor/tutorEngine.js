@@ -175,6 +175,39 @@ export function generateTutorResponse(prompt, subject, topic, records = []) {
   const promptKeywords = extractKeywords(cleanPrompt);
   const intent = detectIntent(cleanPrompt);
 
+  // Helper formatters
+  function formatWorkedExample(example) {
+    if (!example) return '';
+    if (typeof example === 'string') return example;
+    if (typeof example === 'object') {
+      const parts = [];
+      if (example.problem) parts.push(`**Problem:**\n${example.problem}`);
+      if (example.step_by_step_solution) parts.push(`**Step-by-Step Solution:**\n${example.step_by_step_solution}`);
+      if (example.answer) parts.push(`**Final Answer:**\n${example.answer}`);
+      return parts.length ? parts.join('\n\n') : JSON.stringify(example);
+    }
+    return String(example);
+  }
+
+  function formatMistakeItem(m, idx) {
+    if (typeof m === 'string') return `${idx + 1}. ${m}`;
+    if (m && typeof m === 'object') {
+      const mistake = m.mistake || '';
+      const correction = m.correction ? `\n   *Correction:* ${m.correction}` : '';
+      return `${idx + 1}. **Pitfall:** ${mistake}${correction}`;
+    }
+    return `${idx + 1}. ${m}`;
+  }
+
+  function formatOptionItem(o, idx) {
+    if (typeof o === 'string') return o;
+    if (o && typeof o === 'object') {
+      const label = o.label || o.text || o.option || '';
+      return `${String.fromCharCode(65 + idx)}) ${label}`;
+    }
+    return `${String.fromCharCode(65 + idx)}) ${o}`;
+  }
+
   if (intent === 'greeting') {
     return `Hello! I am your AI Study Tutor.\n\nWe are currently exploring **${curTopic}** in **${curSubject}**.\n\nHere are some things you can ask me:\n• "Explain ${curTopic} simply"\n• "Give me a worked example"\n• "Quiz me on this topic"\n• "What are common exam mistakes?"\n\nWhat would you like to learn today?`;
   }
@@ -182,15 +215,16 @@ export function generateTutorResponse(prompt, subject, topic, records = []) {
   if (intent === 'quiz') {
     if (practiceQuestions.length) {
       const q = practiceQuestions[Math.floor(Math.random() * practiceQuestions.length)];
-      const opts = (q.options || []).map((o, idx) => `${String.fromCharCode(65 + idx)}) ${o.label}`).join('\n');
+      const opts = (q.options || []).map((o, idx) => formatOptionItem(o, idx)).join('\n');
       return `Here is a practice question on **${curTopic}**:\n\n**${q.question}**\n\n${opts}\n\nThink about your answer, or try the Quiz tab to test your full knowledge!`;
     }
     return `In **${curTopic}**, a great self-test is to state the main definition from memory, write down the fundamental formulas, and explain how ${keyPoints[0] || 'the main concept'} applies in practice!`;
   }
 
   if (intent === 'example') {
-    if (workedExample) {
-      return `**Worked Example — ${curTopic} (${curSubject}):**\n\n${workedExample}\n\n**Study Strategy:**\n${studyTip}`;
+    const formatted = formatWorkedExample(workedExample);
+    if (formatted) {
+      return `**Worked Example — ${curTopic} (${curSubject}):**\n\n${formatted}\n\n**Study Strategy:**\n${studyTip}`;
     }
     const sampleConcept = keyPoints[0] || lesson.core_explanation || 'Apply the fundamental definition to a sample problem.';
     return `**Example Application in ${curTopic}:**\n\n${sampleConcept}\n\nNotice how the principle is applied step-by-step to arrive at the result.`;
@@ -198,7 +232,7 @@ export function generateTutorResponse(prompt, subject, topic, records = []) {
 
   if (intent === 'mistakes') {
     if (commonMistakes.length) {
-      const mistakeList = commonMistakes.slice(0, 3).map((m, idx) => `${idx + 1}. ${m}`).join('\n');
+      const mistakeList = commonMistakes.slice(0, 3).map((m, idx) => formatMistakeItem(m, idx)).join('\n\n');
       return `**Common Pitfalls in ${curTopic} (${curSubject}):**\n\n${mistakeList}\n\n**Memory Tip:**\n${studyTip}`;
     }
     return `**Key Things to Avoid in ${curTopic}:**\n\n1. Memorizing terms without understanding the underlying rule.\n2. Omitting units or conditions in numerical answers.\n3. Skipping intermediate working in calculations.\n\n**Advice:** ${studyTip}`;

@@ -1,6 +1,6 @@
 import express from 'express';
 import Database from 'better-sqlite3';
-import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync, existsSync, statSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { promisify } from 'node:util';
 import { randomBytes, randomUUID, scrypt, timingSafeEqual } from 'node:crypto';
@@ -151,7 +151,8 @@ app.use((request, response, next) => {
 });
 app.use(express.json());
 
-let catalogCache;
+let catalogCache = null;
+let catalogMtime = 0;
 // Ensure the database directory exists before opening SQLite.
 mkdirSync(path.dirname(databasePath), { recursive: true });
 const database = new Database(databasePath);
@@ -194,10 +195,20 @@ if (!sessionColumns.some((col) => col.name === 'expires_at')) {
 }
 
 async function readCatalog() {
-  // Read and cache the static subject catalog for repeated API requests.
-  if (!catalogCache) {
-    const contents = await readFile(catalogPath, 'utf8');
-    catalogCache = JSON.parse(contents);
+  // Read and cache the subject catalog, reloading automatically if the file on disk is modified.
+  try {
+    const stats = statSync(catalogPath);
+    if (!catalogCache || stats.mtimeMs > catalogMtime) {
+      const contents = await readFile(catalogPath, 'utf8');
+      catalogCache = JSON.parse(contents);
+      catalogMtime = stats.mtimeMs;
+      console.log(`[catalog] Loaded fresh catalog from disk (${catalogCache.records?.length || 0} records).`);
+    }
+  } catch (err) {
+    if (!catalogCache) {
+      const contents = await readFile(catalogPath, 'utf8');
+      catalogCache = JSON.parse(contents);
+    }
   }
   return catalogCache;
 }
@@ -330,6 +341,7 @@ app.get('/api/health', (_request, response) => {
 
 // Explicit route to serve subjects.json with correct application/json header for Service Worker caching
 app.get('/subjects.json', (_request, response) => {
+  response.set('Cache-Control', 'no-cache, no-store, must-revalidate');
   response.sendFile(catalogPath);
 });
 
@@ -657,7 +669,9 @@ app.post('/api/progress', requireAuth, (request, response, next) => {
 // Return the complete catalog used by the client.
 app.get('/api/catalog', async (_request, response, next) => {
   try {
-    response.json(await readCatalog());
+    const catalog = await readCatalog();
+    response.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    response.json(catalog);
   } catch (error) {
     next(error);
   }

@@ -1,5 +1,5 @@
 // Cache identifier and static files required to start the app offline.
-const CACHE_NAME = 'study-app-v11';
+const CACHE_NAME = 'bravoh-app-v13';
 const APP_SHELL = [
   './',
   './index.html',

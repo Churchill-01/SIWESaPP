@@ -481,14 +481,6 @@ function escapeHtml(str) {
   })[m]);
 }
 
-const PROVIDER_HINTS = {
-  gemini: 'Get a free key from <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer">Google AI Studio</a>.',
-  groq: 'Get a free key from <a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer">Groq Console</a>.',
-  openai: 'Get a key from <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer">OpenAI Platform</a>.',
-  openrouter: 'Get a key from <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer">OpenRouter</a>.',
-  custom: 'Enter your custom OpenAI-compatible API URL and Model name.'
-};
-
 function updateAiStatusUi() {
   const statusEl = document.querySelector('#ai-status');
   fetch('/api/ai/status')
@@ -496,198 +488,469 @@ function updateAiStatusUi() {
     .then((data) => {
       if (!statusEl) return;
       if (data?.configured) {
-        statusEl.innerHTML = `<span class="status-dot online"></span> Online AI ready (${escapeHtml(data.model || data.provider)}) · <button type="button" class="inline-link-btn ai-open-settings-action">Settings</button>`;
+        statusEl.innerHTML = `<span class="status-dot online"></span> Online AI ready (${escapeHtml(data.model || data.provider)})`;
       } else {
-        statusEl.innerHTML = `<span class="status-dot offline"></span> Offline tutor active · <button type="button" class="inline-link-btn ai-open-settings-action">Add API Key</button>`;
+        statusEl.innerHTML = `<span class="status-dot offline"></span> Study engine active`;
       }
     })
     .catch(() => {
       if (statusEl) {
-        statusEl.innerHTML = `<span class="status-dot offline"></span> Offline study engine active`;
+        statusEl.innerHTML = `<span class="status-dot offline"></span> Study engine active`;
       }
     });
-}
-
-function openAiModal() {
-  const modal = document.querySelector('#ai-modal');
-  if (!modal) return;
-  const msg = document.querySelector('#ai-config-message');
-  if (msg) {
-    msg.textContent = '';
-    msg.className = 'form-message';
-  }
-
-  fetch('/api/ai/status')
-    .then((res) => (res.ok ? res.json() : null))
-    .then((data) => {
-      if (!data) return;
-      const providerSelect = document.querySelector('#ai-provider-select');
-      const keyInput = document.querySelector('#ai-key-input');
-      const customUrl = document.querySelector('#ai-custom-url');
-      const customModel = document.querySelector('#ai-custom-model');
-
-      if (providerSelect && data.provider) {
-        providerSelect.value = data.provider;
-        syncProviderFields(data.provider);
-      }
-      if (keyInput) {
-        keyInput.value = '';
-        if (data.maskedKey) {
-          keyInput.placeholder = `Active key: ${data.maskedKey} (leave empty to keep)`;
-        } else {
-          keyInput.placeholder = 'Paste your API key here...';
-        }
-      }
-      if (customUrl && data.url) customUrl.value = data.url;
-      if (customModel && data.model) customModel.value = data.model;
-    })
-    .catch(() => {});
-
-  modal.classList.add('active');
-  modal.setAttribute('aria-hidden', 'false');
-}
-
-function closeAiModal() {
-  const modal = document.querySelector('#ai-modal');
-  if (!modal) return;
-  modal.classList.remove('active');
-  modal.setAttribute('aria-hidden', 'true');
-}
-
-function syncProviderFields(provider) {
-  const customUrlGroup = document.querySelector('#ai-custom-url-group');
-  const customModelGroup = document.querySelector('#ai-custom-model-group');
-  const hint = document.querySelector('#ai-provider-hint');
-
-  const isCustom = provider === 'custom';
-  if (customUrlGroup) customUrlGroup.style.display = isCustom ? 'block' : 'none';
-  if (customModelGroup) customModelGroup.style.display = isCustom ? 'block' : 'none';
-  if (hint) hint.innerHTML = PROVIDER_HINTS[provider] || PROVIDER_HINTS.gemini;
 }
 
 function setupAiModal() {
-  const openBtn = document.querySelector('#ai-settings-btn');
-  const closeBtn = document.querySelector('#ai-modal-close');
-  const backdrop = document.querySelector('#ai-modal-backdrop');
-  const providerSelect = document.querySelector('#ai-provider-select');
-  const keyToggle = document.querySelector('#ai-key-toggle');
-  const keyInput = document.querySelector('#ai-key-input');
-  const form = document.querySelector('#ai-config-form');
-  const clearBtn = document.querySelector('#ai-clear-btn');
-  const msg = document.querySelector('#ai-config-message');
-  const saveBtn = document.querySelector('#ai-save-btn');
+  // Public API key configuration has been removed.
+  // The administrator configures the online AI key directly on the server.
+}
 
-  if (openBtn) openBtn.addEventListener('click', openAiModal);
-  if (closeBtn) closeBtn.addEventListener('click', closeAiModal);
-  if (backdrop) backdrop.addEventListener('click', closeAiModal);
-
-  document.addEventListener('click', (e) => {
-    if (e.target.closest('.ai-open-settings-action') || e.target.id === 'ai-status-config-link') {
-      e.preventDefault();
-      openAiModal();
+function extractBalancedBraces(str, startIndex) {
+  let depth = 0;
+  let start = -1;
+  for (let i = startIndex; i < str.length; i++) {
+    if (str[i] === '{') {
+      if (depth === 0) start = i;
+      depth++;
+    } else if (str[i] === '}') {
+      depth--;
+      if (depth === 0) {
+        return { start, end: i, content: str.slice(start + 1, i) };
+      }
     }
+  }
+  return null;
+}
+
+function renderMathLatex(tex) {
+  let s = String(tex || '').trim();
+
+  // Spacing
+  s = s.replace(/\\(quad|qquad|,|;|!)/g, ' ');
+
+  // Symbols and Greek letters
+  const replacements = [
+    [/\\pm\b/g, '&plusmn;'],
+    [/\\mp\b/g, '&#8723;'],
+    [/\\times\b/g, '&times;'],
+    [/\\div\b/g, '&divide;'],
+    [/\\cdot\b/g, '&sdot;'],
+    [/\\leq?\b/g, '&le;'],
+    [/\\geq?\b/g, '&ge;'],
+    [/\\neq?\b/g, '&ne;'],
+    [/\\approx\b/g, '&asymp;'],
+    [/\\sim\b/g, '&sim;'],
+    [/\\propto\b/g, '&prop;'],
+    [/\\infin(ty)?\b/g, '&infin;'],
+    [/\\(to|rightarrow)\b/g, '&rarr;'],
+    [/\\(gets|leftarrow)\b/g, '&larr;'],
+    [/\\leftrightarrow\b/g, '&harr;'],
+    [/\\(Rightarrow|implies)\b/g, '&rArr;'],
+    [/\\(Leftrightarrow|iff)\b/g, '&hArr;'],
+    [/\\(degree|deg)\b/g, '&deg;'],
+    [/\\int\b/g, '&int;'],
+    [/\\sum\b/g, '&sum;'],
+    [/\\prod\b/g, '&prod;'],
+    [/\\in\b/g, '&isin;'],
+    [/\\notin\b/g, '&notin;'],
+    [/\\subset\b/g, '&sub;'],
+    [/\\subseteq\b/g, '&sube;'],
+    [/\\cup\b/g, '&cup;'],
+    [/\\cap\b/g, '&cap;'],
+    [/\\(empty|emptyset)\b/g, '&empty;'],
+    [/\\forall\b/g, '&forall;'],
+    [/\\exists\b/g, '&exist;'],
+    [/\\therefore\b/g, '&there4;'],
+    [/\\because\b/g, '&#8757;'],
+    [/\\angle\b/g, '&ang;'],
+    [/\\perp\b/g, '&perp;'],
+    [/\\parallel\b/g, '&#8741;'],
+    [/\\nabla\b/g, '&nabla;'],
+    [/\\partial\b/g, '&part;'],
+    [/\\Delta\b/g, '&Delta;'],
+    [/\\Gamma\b/g, '&Gamma;'],
+    [/\\Lambda\b/g, '&Lambda;'],
+    [/\\Omega\b/g, '&Omega;'],
+    [/\\Phi\b/g, '&Phi;'],
+    [/\\Pi\b/g, '&Pi;'],
+    [/\\Psi\b/g, '&Psi;'],
+    [/\\Sigma\b/g, '&Sigma;'],
+    [/\\Theta\b/g, '&Theta;'],
+    [/\\Upsilon\b/g, '&Upsilon;'],
+    [/\\Xi\b/g, '&Xi;'],
+    [/\\alpha\b/g, '&alpha;'],
+    [/\\beta\b/g, '&beta;'],
+    [/\\gamma\b/g, '&gamma;'],
+    [/\\delta\b/g, '&delta;'],
+    [/\\epsilon\b/g, '&epsilon;'],
+    [/\\zeta\b/g, '&zeta;'],
+    [/\\eta\b/g, '&eta;'],
+    [/\\theta\b/g, '&theta;'],
+    [/\\iota\b/g, '&iota;'],
+    [/\\kappa\b/g, '&kappa;'],
+    [/\\lambda\b/g, '&lambda;'],
+    [/\\mu\b/g, '&mu;'],
+    [/\\nu\b/g, '&nu;'],
+    [/\\xi\b/g, '&xi;'],
+    [/\\pi\b/g, '&pi;'],
+    [/\\rho\b/g, '&rho;'],
+    [/\\sigma\b/g, '&sigma;'],
+    [/\\tau\b/g, '&tau;'],
+    [/\\upsilon\b/g, '&upsilon;'],
+    [/\\phi\b/g, '&phi;'],
+    [/\\chi\b/g, '&chi;'],
+    [/\\psi\b/g, '&psi;'],
+    [/\\omega\b/g, '&omega;'],
+    [/\\mathbb\{R\}/g, 'ℝ'],
+    [/\\mathbb\{N\}/g, 'ℕ'],
+    [/\\mathbb\{Z\}/g, 'ℤ'],
+    [/\\mathbb\{Q\}/g, 'ℚ'],
+    [/\\mathbb\{C\}/g, 'ℂ']
+  ];
+
+  for (const [pattern, repl] of replacements) {
+    s = s.replace(pattern, repl);
+  }
+
+  // Text inside math
+  s = s.replace(/\\(text|mathrm)\{([^{}]+)\}/g, '<span class="math-text">$2</span>');
+  s = s.replace(/\\mathbf\{([^{}]+)\}/g, '<strong>$1</strong>');
+  s = s.replace(/\\mathit\{([^{}]+)\}/g, '<em>$1</em>');
+
+  // Fractions with balanced braces
+  function parseFractions(str) {
+    let out = '';
+    let i = 0;
+    while (i < str.length) {
+      const idx = str.indexOf('\\frac', i);
+      if (idx === -1) {
+        out += str.slice(i);
+        break;
+      }
+      out += str.slice(i, idx);
+      const first = extractBalancedBraces(str, idx + 5);
+      if (!first) {
+        out += '\\frac';
+        i = idx + 5;
+        continue;
+      }
+      const second = extractBalancedBraces(str, first.end + 1);
+      if (!second) {
+        out += '\\frac{' + first.content + '}';
+        i = first.end + 1;
+        continue;
+      }
+      const num = parseFractions(first.content);
+      const den = parseFractions(second.content);
+      out += `<span class="math-fraction"><span class="math-num">${num}</span><span class="math-den">${den}</span></span>`;
+      i = second.end + 1;
+    }
+    return out;
+  }
+  s = parseFractions(s);
+
+  // Square roots with balanced braces
+  function parseRoots(str) {
+    let out = '';
+    let i = 0;
+    while (i < str.length) {
+      const idx = str.indexOf('\\sqrt', i);
+      if (idx === -1) {
+        out += str.slice(i);
+        break;
+      }
+      out += str.slice(i, idx);
+      let afterIdx = idx + 5;
+      let rootDegree = '';
+      if (str[afterIdx] === '[') {
+        const closeBracket = str.indexOf(']', afterIdx);
+        if (closeBracket !== -1) {
+          rootDegree = str.slice(afterIdx + 1, closeBracket);
+          afterIdx = closeBracket + 1;
+        }
+      }
+      const brace = extractBalancedBraces(str, afterIdx);
+      if (!brace) {
+        out += str.slice(idx, afterIdx);
+        i = afterIdx;
+        continue;
+      }
+      const radicand = parseRoots(brace.content);
+      if (rootDegree) {
+        out += `<span class="math-sqrt"><sup class="math-root-index">${rootDegree}</sup><span class="math-rad">&radic;</span><span class="math-radicand">${radicand}</span></span>`;
+      } else {
+        out += `<span class="math-sqrt"><span class="math-rad">&radic;</span><span class="math-radicand">${radicand}</span></span>`;
+      }
+      i = brace.end + 1;
+    }
+    return out;
+  }
+  s = parseRoots(s);
+
+  // Parentheses sizing commands \left( \right)
+  s = s.replace(/\\left([(\[{|])/g, '$1').replace(/\\right([)\]}|])/g, '$1');
+
+  // Degree ^\circ
+  s = s.replace(/\^\\circ/g, '&deg;');
+  // Powers and exponents: ^{...} or ^x
+  s = s.replace(/\^\{([^{}]+)\}/g, '<sup>$1</sup>');
+  s = s.replace(/\^([a-zA-Z0-9+\-]+)/g, '<sup>$1</sup>');
+
+  // Subscripts: _{...} or _x
+  s = s.replace(/_\{([^{}]+)\}/g, '<sub>$1</sub>');
+  s = s.replace(/_([a-zA-Z0-9+\-]+)/g, '<sub>$1</sub>');
+
+  // Clean unhandled backslashes on remaining letters
+  s = s.replace(/\\([a-zA-Z]+)/g, '$1');
+
+  return s;
+}
+
+function formatAiResponse(raw) {
+  if (!raw) return '';
+  let text = String(raw).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+
+  const placeholders = [];
+  function savePlaceholder(html) {
+    const key = `___AI_PLACEHOLDER_${placeholders.length}___`;
+    placeholders.push({ key, html });
+    return key;
+  }
+
+  // 1. Code blocks ```lang\ncode\n```
+  text = text.replace(/```([a-zA-Z0-9_-]*)\n([\s\S]*?)```/g, (match, lang, code) => {
+    const cleanLang = lang.trim() || 'code';
+    const escapedCode = escapeHtml(code.trimEnd());
+    const cardHtml = `
+      <div class="ai-code-block">
+        <div class="ai-code-header">
+          <span class="ai-code-lang">${cleanLang}</span>
+          <button type="button" class="ai-code-copy-btn">Copy</button>
+        </div>
+        <pre><code class="language-${cleanLang}">${escapedCode}</code></pre>
+      </div>
+    `.trim();
+    return savePlaceholder(cardHtml);
   });
 
-  if (providerSelect) {
-    providerSelect.addEventListener('change', (e) => {
-      syncProviderFields(e.target.value);
-    });
-  }
+  // 2. Display math blocks: $$ ... $$ or \[ ... \]
+  text = text.replace(/\$\$([\s\S]*?)\$\$/g, (match, math) => {
+    const rendered = renderMathLatex(escapeHtml(math));
+    return savePlaceholder(`<div class="math-block" role="math">${rendered}</div>`);
+  });
+  text = text.replace(/\\\[([\s\S]*?)\\\]/g, (match, math) => {
+    const rendered = renderMathLatex(escapeHtml(math));
+    return savePlaceholder(`<div class="math-block" role="math">${rendered}</div>`);
+  });
 
-  if (keyToggle && keyInput) {
-    keyToggle.addEventListener('click', () => {
-      const isPassword = keyInput.type === 'password';
-      keyInput.type = isPassword ? 'text' : 'password';
-      keyToggle.textContent = isPassword ? '🔒' : '👁️';
-    });
-  }
+  // 3. Inline math: $...$ or \(...\)
+  text = text.replace(/\\\(([\s\S]*?)\\\)/g, (match, math) => {
+    const rendered = renderMathLatex(escapeHtml(math));
+    return savePlaceholder(`<span class="math-inline" role="math">${rendered}</span>`);
+  });
+  text = text.replace(/(^|[^\\])\$([^\$\n]+?)\$/g, (match, prefix, math) => {
+    const rendered = renderMathLatex(escapeHtml(math));
+    return prefix + savePlaceholder(`<span class="math-inline" role="math">${rendered}</span>`);
+  });
 
-  if (clearBtn) {
-    clearBtn.addEventListener('click', async () => {
-      if (msg) {
-        msg.textContent = 'Clearing key...';
-        msg.className = 'form-message';
+  function formatInline(str) {
+    if (!str) return '';
+    let s = str;
+    // Inline code
+    s = s.replace(/`([^`]+)`/g, '<code class="ai-inline-code">$1</code>');
+    // Bold
+    s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    s = s.replace(/__([^_]+)__/g, '<strong>$1</strong>');
+    // Italic
+    s = s.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+    s = s.replace(/\b_([^_]+)_\b/g, '<em>$1</em>');
+    // Strikethrough
+    s = s.replace(/~~([^~]+)~~/g, '<del>$1</del>');
+
+    // Chemical formulas in plain text (e.g. H2O, CO2, CaCO3, H2SO4, KMnO4, CH4, O2, N2, etc.)
+    s = s.replace(/\b([A-Z][a-z]?\d*(?:[A-Z][a-z]?\d*)+)\b/g, (full) => {
+      const formulaRegex = /^([A-Z][a-z]?)(\d*)([A-Z][a-z]?)(\d*)([A-Z][a-z]?)?(\d*)?([A-Z][a-z]?)?(\d*)?$/;
+      if (formulaRegex.test(full)) {
+        return full.replace(/([A-Za-z])(\d+)/g, '$1<sub>$2</sub>');
       }
-      try {
-        const res = await requestJson('/api/ai/config', {
-          method: 'POST',
-          body: JSON.stringify({ key: '' })
+      return full;
+    });
+    // Single element diatomic or molecules: O2, N2, H2, Cl2
+    s = s.replace(/\b([A-Z][a-z]?)([2-9])\b/g, '$1<sub>$2</sub>');
+
+    // Units with exponents: m/s^2, cm^3, m^2, km/h, kg/m^3, s^-1
+    s = s.replace(/([a-zA-Z]+)\^([0-9+\-]+)/g, '$1<sup>$2</sup>');
+    // Algebraic powers: x^2, y^3
+    s = s.replace(/\b([a-zA-Z])\^([0-9+\-]+)/g, '$1<sup>$2</sup>');
+    // Subscripts: x_1, v_i, t_0
+    s = s.replace(/\b([a-zA-Z])_([0-9a-zA-Z]+)\b/g, '$1<sub>$2</sub>');
+
+    // Arrows and operators in text
+    s = s.replace(/<->/g, '&#8596;');
+    s = s.replace(/->/g, '&#8594;');
+    s = s.replace(/=>/g, '&#8658;');
+    s = s.replace(/\+\/-/g, '&plusmn;');
+    s = s.replace(/\bdeg\s*C\b/gi, '&deg;C');
+
+    return s;
+  }
+
+  // 4. Markdown tables
+  const lines = text.split('\n');
+  const processedLines = [];
+  let i = 0;
+
+  function isTableDelimiter(line) {
+    if (!line) return false;
+    const trimmed = line.trim();
+    return /^\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)+\|?$/.test(trimmed);
+  }
+
+  function parseTableRow(line) {
+    let cells = line.trim();
+    if (cells.startsWith('|')) cells = cells.slice(1);
+    if (cells.endsWith('|')) cells = cells.slice(0, -1);
+    return cells.split('|').map((c) => c.trim());
+  }
+
+  while (i < lines.length) {
+    const line = lines[i];
+    if (i + 1 < lines.length && line.includes('|') && isTableDelimiter(lines[i + 1])) {
+      const headerCells = parseTableRow(line);
+      const delimCells = parseTableRow(lines[i + 1]);
+      const alignments = delimCells.map((d) => {
+        const left = d.startsWith(':');
+        const right = d.endsWith(':');
+        if (left && right) return 'center';
+        if (right) return 'right';
+        if (left) return 'left';
+        return 'left';
+      });
+
+      const bodyRows = [];
+      i += 2;
+      while (i < lines.length && lines[i].trim() && lines[i].includes('|')) {
+        bodyRows.push(parseTableRow(lines[i]));
+        i++;
+      }
+
+      let tableHtml = '<div class="ai-table-wrap"><table class="ai-table"><thead><tr>';
+      headerCells.forEach((th, idx) => {
+        const align = alignments[idx] || 'left';
+        tableHtml += `<th style="text-align:${align}">${formatInline(th)}</th>`;
+      });
+      tableHtml += '</tr></thead><tbody>';
+
+      bodyRows.forEach((row) => {
+        tableHtml += '<tr>';
+        row.forEach((td, idx) => {
+          const align = alignments[idx] || 'left';
+          tableHtml += `<td style="text-align:${align}">${formatInline(td)}</td>`;
         });
-        if (msg) {
-          msg.textContent = res.message || 'Key cleared. Switched to offline tutor.';
-          msg.className = 'form-message success';
-        }
-        if (keyInput) {
-          keyInput.value = '';
-          keyInput.placeholder = 'Paste your API key here...';
-        }
-        updateAiStatusUi();
-        setTimeout(closeAiModal, 1200);
-      } catch (err) {
-        if (msg) {
-          msg.textContent = err.message || 'Failed to clear key.';
-          msg.className = 'form-message error';
-        }
-      }
-    });
+        tableHtml += '</tr>';
+      });
+      tableHtml += '</tbody></table></div>';
+
+      processedLines.push(savePlaceholder(tableHtml));
+      continue;
+    }
+    processedLines.push(line);
+    i++;
+  }
+  text = processedLines.join('\n');
+
+  // 5. Block elements: Headings, Blockquotes, HR, Lists
+  const blockLines = text.split('\n');
+  const resultBlocks = [];
+  let currentList = null;
+
+  function flushList() {
+    if (!currentList) return;
+    const tag = currentList.type;
+    const itemsHtml = currentList.items.map((it) => `<li>${formatInline(it)}</li>`).join('');
+    resultBlocks.push(`<${tag} class="ai-list">${itemsHtml}</${tag}>`);
+    currentList = null;
   }
 
-  if (form) {
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const provider = providerSelect ? providerSelect.value : 'gemini';
-      const key = keyInput ? keyInput.value.trim() : '';
-      const customUrl = document.querySelector('#ai-custom-url')?.value.trim();
-      const customModel = document.querySelector('#ai-custom-model')?.value.trim();
+  for (let j = 0; j < blockLines.length; j++) {
+    const rawLine = blockLines[j];
+    const line = rawLine.trim();
 
-      if (!key) {
-        if (msg) {
-          msg.textContent = 'Please enter an API key to test and save, or click "Clear Key".';
-          msg.className = 'form-message error';
-        }
-        return;
-      }
+    if (!line) {
+      flushList();
+      continue;
+    }
 
-      if (saveBtn) {
-        saveBtn.disabled = true;
-        saveBtn.textContent = 'Testing connection...';
-      }
-      if (msg) {
-        msg.textContent = 'Connecting to provider and verifying API key...';
-        msg.className = 'form-message';
-      }
+    if (/^___AI_PLACEHOLDER_\d+___$/.test(line)) {
+      flushList();
+      resultBlocks.push(line);
+      continue;
+    }
 
-      try {
-        const payload = { provider, key };
-        if (provider === 'custom') {
-          payload.url = customUrl;
-          payload.model = customModel;
-        }
+    if (/^(-{3,}|\*{3,}|_{3,})$/.test(line)) {
+      flushList();
+      resultBlocks.push('<hr class="ai-hr">');
+      continue;
+    }
 
-        const res = await requestJson('/api/ai/config', {
-          method: 'POST',
-          body: JSON.stringify(payload)
-        });
+    if (/^####\s+(.+)$/.test(line)) {
+      flushList();
+      resultBlocks.push(`<h4>${formatInline(line.replace(/^####\s+/, ''))}</h4>`);
+      continue;
+    }
+    if (/^###\s+(.+)$/.test(line)) {
+      flushList();
+      resultBlocks.push(`<h3>${formatInline(line.replace(/^###\s+/, ''))}</h3>`);
+      continue;
+    }
+    if (/^##\s+(.+)$/.test(line)) {
+      flushList();
+      resultBlocks.push(`<h2>${formatInline(line.replace(/^##\s+/, ''))}</h2>`);
+      continue;
+    }
+    if (/^#\s+(.+)$/.test(line)) {
+      flushList();
+      resultBlocks.push(`<h1>${formatInline(line.replace(/^#\s+/, ''))}</h1>`);
+      continue;
+    }
 
-        if (msg) {
-          msg.textContent = res.message || 'Online AI verified and ready!';
-          msg.className = 'form-message success';
-        }
-        updateAiStatusUi();
-        setTimeout(closeAiModal, 1200);
-      } catch (err) {
-        if (msg) {
-          msg.textContent = err.message || 'Could not verify API key.';
-          msg.className = 'form-message error';
-        }
-      } finally {
-        if (saveBtn) {
-          saveBtn.disabled = false;
-          saveBtn.textContent = 'Test & Save';
-        }
-      }
-    });
+    if (/^>\s*(.+)$/.test(line)) {
+      flushList();
+      const quoteText = line.replace(/^>\s*/, '');
+      resultBlocks.push(`<blockquote class="ai-quote">${formatInline(quoteText)}</blockquote>`);
+      continue;
+    }
+
+    const ulMatch = line.match(/^[-*•+]\s+(.+)$/);
+    if (ulMatch) {
+      if (currentList && currentList.type !== 'ul') flushList();
+      if (!currentList) currentList = { type: 'ul', items: [] };
+      currentList.items.push(ulMatch[1]);
+      continue;
+    }
+
+    const olMatch = line.match(/^(\d+)[.)]\s+(.+)$/);
+    if (olMatch) {
+      if (currentList && currentList.type !== 'ol') flushList();
+      if (!currentList) currentList = { type: 'ol', items: [] };
+      currentList.items.push(olMatch[2]);
+      continue;
+    }
+
+    flushList();
+    resultBlocks.push(`<p>${formatInline(line)}</p>`);
   }
+
+  flushList();
+
+  let finalHtml = resultBlocks.join('\n');
+
+  // Restore placeholders
+  for (const item of placeholders) {
+    finalHtml = finalHtml.replaceAll(item.key, item.html);
+  }
+
+  return finalHtml;
 }
 
 function renderAiChat(question, answer, meta = {}) {
@@ -705,9 +968,20 @@ function renderAiChat(question, answer, meta = {}) {
   const log = document.querySelector('#ai-chat-log');
   if (!log) return;
 
-  const questionNode = document.createElement('div');
-  questionNode.className = 'chat-message user-message';
-  questionNode.textContent = question;
+  // Remove temporary thinking bubble if present
+  const loadingBubble = document.querySelector('#ai-loading-bubble');
+  if (loadingBubble) loadingBubble.remove();
+
+  // If question was already rendered (e.g. while thinking), keep it; otherwise append it
+  const pendingQuestion = log.querySelector('.user-message[data-pending="true"]');
+  if (pendingQuestion) {
+    pendingQuestion.removeAttribute('data-pending');
+  } else {
+    const questionNode = document.createElement('div');
+    questionNode.className = 'chat-message user-message';
+    questionNode.textContent = question;
+    log.append(questionNode);
+  }
 
   const answerNode = document.createElement('div');
   answerNode.className = 'chat-message ai-message';
@@ -720,29 +994,35 @@ function renderAiChat(question, answer, meta = {}) {
   if (!meta.online && meta.onlineError) {
     noticeHtml = `
       <div class="ai-fallback-notice">
-        ℹ️ <em>Online AI unavailable (${escapeHtml(meta.onlineError)}).</em> Switched to offline curriculum intelligence. <button type="button" class="inline-link-btn ai-open-settings-action">Configure AI key</button>
+        ℹ️ <em>Online AI unavailable (${escapeHtml(meta.onlineError)}).</em> Switched to offline curriculum intelligence.
       </div>
     `;
   }
 
   answerNode.innerHTML = `
-    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
-      <strong>AI Tutor</strong>
+    <div class="ai-answer-header">
+      <span class="ai-answer-title">
+        <svg class="icon" viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;" aria-hidden="true"><path d="m12 3 1.5 5.5L19 10l-5.5 1.5L12 17l-1.5-5.5L5 10l5.5-1.5L12 3Z"/></svg>
+        AI Tutor
+      </span>
       ${sourceBadge}
     </div>
-    <div class="ai-answer-body"></div>
+    <div class="ai-answer-body">${formatAiResponse(answer)}</div>
     ${noticeHtml}
   `;
 
-  answerNode.querySelector('.ai-answer-body').append(document.createTextNode(answer));
-
-  log.append(questionNode, answerNode);
+  log.append(answerNode);
 
   const currentPromptList = document.querySelector('#prompt-list');
   if (currentPromptList) currentPromptList.style.display = 'none';
 
   const label = document.querySelector('.try-label');
-  if (label) label.textContent = 'RECENT ANSWER';
+  if (label) label.style.display = 'none';
+
+  // Smooth scroll to the answer
+  setTimeout(() => {
+    answerNode.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, 40);
 }
 
 async function askAiTutor() {
@@ -753,6 +1033,37 @@ async function askAiTutor() {
   const rawPrompt = input ? input.textContent.trim() : '';
   const promptText = rawPrompt && rawPrompt !== placeholder ? rawPrompt : 'Explain this topic in a simple way for a high school student';
   const question = promptText;
+
+  // Immediately display user message and thinking indicator in the chat
+  const chatArea = document.querySelector('.chat-area');
+  if (chatArea) {
+    const welcome = document.querySelector('#ai-welcome-msg');
+    if (welcome) welcome.style.display = 'none';
+
+    let log = document.querySelector('#ai-chat-log');
+    if (!log) {
+      log = document.createElement('div');
+      log.id = 'ai-chat-log';
+      log.className = 'chat-log';
+      chatArea.prepend(log);
+    }
+    const qNode = document.createElement('div');
+    qNode.className = 'chat-message user-message';
+    qNode.dataset.pending = 'true';
+    qNode.textContent = question;
+
+    const loadingNode = document.createElement('div');
+    loadingNode.id = 'ai-loading-bubble';
+    loadingNode.className = 'chat-message ai-message ai-loading-bubble';
+    loadingNode.innerHTML = `
+      <div class="ai-loading-dots">
+        <span></span><span></span><span></span>
+      </div>
+      <span class="ai-loading-text">AI Tutor is thinking...</span>
+    `;
+    log.append(qNode, loadingNode);
+    loadingNode.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
 
   if (submitButton) submitButton.disabled = true;
   if (status) status.innerHTML = '<span class="status-dot offline"></span> Thinking...';
@@ -768,13 +1079,17 @@ async function askAiTutor() {
     renderAiChat(question, result.answer, result);
     if (status) {
       if (result.online) {
-        status.innerHTML = `<span class="status-dot online"></span> Answered by Online AI (${escapeHtml(result.model || 'live')}) · <button type="button" class="inline-link-btn ai-open-settings-action">Settings</button>`;
+        status.innerHTML = `<span class="status-dot online"></span> Answered by Online AI (${escapeHtml(result.model || 'live')})`;
       } else if (result.onlineError) {
-        status.innerHTML = `<span class="status-dot offline"></span> Offline Tutor (Online AI: ${escapeHtml(result.onlineError)}) · <button type="button" class="inline-link-btn ai-open-settings-action">Fix Key</button>`;
+        status.innerHTML = `<span class="status-dot offline"></span> Offline Tutor (Online AI: ${escapeHtml(result.onlineError)})`;
       } else {
         status.innerHTML = `<span class="status-dot offline"></span> Answered by offline curriculum tutor`;
       }
     }
+  } catch (err) {
+    const loadingBubble = document.querySelector('#ai-loading-bubble');
+    if (loadingBubble) loadingBubble.remove();
+    renderAiChat(question, 'Sorry, something went wrong while getting the answer. Please try again.', { online: false, onlineError: err?.message || 'Error' });
   } finally {
     if (submitButton) submitButton.disabled = false;
   }
@@ -1151,6 +1466,20 @@ function initializeApp() {
     onAnswerClick(event);
     onPromptClick(event);
     onAiSubmit(event);
+
+    const copyBtn = event.target.closest('.ai-code-copy-btn');
+    if (copyBtn) {
+      const codeEl = copyBtn.closest('.ai-code-block')?.querySelector('code');
+      if (codeEl && navigator.clipboard) {
+        navigator.clipboard.writeText(codeEl.textContent || '').then(() => {
+          copyBtn.textContent = 'Copied!';
+          setTimeout(() => { copyBtn.textContent = 'Copy'; }, 2000);
+        }).catch(() => {
+          copyBtn.textContent = 'Failed';
+          setTimeout(() => { copyBtn.textContent = 'Copy'; }, 2000);
+        });
+      }
+    }
   };
 
   if (app) app.addEventListener('click', handleClick);

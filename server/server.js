@@ -6,6 +6,57 @@ import { promisify } from 'node:util';
 import { randomBytes, randomUUID, scrypt, timingSafeEqual } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import https from 'node:https';
+import dns from 'node:dns';
+
+// Resolve IPv4 first to prevent Node.js Undici connect timeouts on Windows
+try {
+  dns.setDefaultResultOrder('ipv4first');
+} catch {}
+
+function postJsonHttps(urlStr, headers, bodyObj, timeoutMs = 25000) {
+  return new Promise((resolve, reject) => {
+    const parsedUrl = new URL(urlStr);
+    const postData = JSON.stringify(bodyObj);
+
+    const req = https.request(parsedUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(postData),
+        ...headers
+      },
+      timeout: timeoutMs
+    }, (res) => {
+      let rawData = '';
+      res.setEncoding('utf8');
+      res.on('data', (chunk) => { rawData += chunk; });
+      res.on('end', () => {
+        let json = null;
+        try {
+          json = JSON.parse(rawData);
+        } catch {}
+        resolve({
+          ok: res.statusCode >= 200 && res.statusCode < 300,
+          status: res.statusCode,
+          json: async () => json || {},
+          text: async () => rawData
+        });
+      });
+    });
+
+    req.on('timeout', () => {
+      req.destroy(new Error(`Connection timed out after ${timeoutMs / 1000}s`));
+    });
+
+    req.on('error', (err) => {
+      reject(err);
+    });
+
+    req.write(postData);
+    req.end();
+  });
+}
 
 // Resolve project paths and runtime settings from the server location.
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -88,7 +139,7 @@ const PROVIDER_PRESETS = {
   gemini: {
     name: 'Google Gemini',
     url: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
-    model: 'gemini-1.5-flash'
+    model: 'gemini-flash-lite-latest'
   },
   groq: {
     name: 'Groq',
@@ -106,6 +157,7 @@ const PROVIDER_PRESETS = {
     model: 'meta-llama/llama-3.3-70b-instruct:free'
   }
 };
+
 
 const defaultProvider = process.env.ONLINE_AI_PROVIDER || 'gemini';
 const defaultPreset = PROVIDER_PRESETS[defaultProvider] || PROVIDER_PRESETS.gemini;
@@ -356,78 +408,12 @@ app.get('/api/ai/status', (_request, response) => {
   });
 });
 
-// Configure or test an online AI provider and persist key to .env.
-app.post('/api/ai/config', async (request, response) => {
-  try {
-    const { provider = 'gemini', key = '', url, model } = request.body || {};
-    const trimmedKey = String(key || '').trim();
-
-    // If clearing key:
-    if (!trimmedKey) {
-      onlineAiConfig.key = '';
-      updateEnvFile(projectEnvPath, { ONLINE_AI_KEY: '' });
-      response.json({
-        success: true,
-        configured: false,
-        message: 'Online AI key cleared. The tutor will now operate using local offline curriculum intelligence.'
-      });
-      return;
-    }
-
-    const preset = PROVIDER_PRESETS[provider];
-    const targetUrl = (url && String(url).trim()) || preset?.url || onlineAiConfig.url;
-    const targetModel = (model && String(model).trim()) || preset?.model || onlineAiConfig.model;
-
-    // Test upstream connection with the key by making a minimal test call
-    const testResponse = await fetch(targetUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${trimmedKey}`
-      },
-      body: JSON.stringify({
-        model: targetModel,
-        messages: [{ role: 'user', content: 'Say "OK"' }],
-        max_tokens: 5
-      })
-    });
-
-    if (!testResponse.ok) {
-      let detail = `Provider returned HTTP ${testResponse.status}`;
-      try {
-        const errorBody = await testResponse.json();
-        detail = errorBody?.error?.message || errorBody?.message || detail;
-      } catch {}
-      response.status(400).json({
-        error: `Could not verify API key with ${preset?.name || provider}: ${detail}`
-      });
-      return;
-    }
-
-    // Key is verified. Update server runtime config and save to .env
-    onlineAiConfig.provider = provider;
-    onlineAiConfig.url = targetUrl;
-    onlineAiConfig.key = trimmedKey;
-    onlineAiConfig.model = targetModel;
-
-    updateEnvFile(projectEnvPath, {
-      ONLINE_AI_PROVIDER: provider,
-      ONLINE_AI_URL: targetUrl,
-      ONLINE_AI_MODEL: targetModel,
-      ONLINE_AI_KEY: trimmedKey
-    });
-
-    response.json({
-      success: true,
-      configured: true,
-      provider,
-      model: targetModel,
-      maskedKey: maskKey(trimmedKey),
-      message: `Successfully connected to ${preset?.name || provider} (${targetModel})!`
-    });
-  } catch (error) {
-    response.status(500).json({ error: `Failed to configure AI: ${error.message}` });
-  }
+// Public AI key configuration is disabled.
+// The API key is set server-side by the administrator for all students and public users.
+app.post('/api/ai/config', (_request, response) => {
+  response.status(403).json({
+    error: 'Public AI key configuration is disabled. The API key is managed server-side by the administrator.'
+  });
 });
 
 // Proxy the optional online tutor with optional auth, rate limiting, and intelligent curriculum context resolution.
@@ -467,41 +453,75 @@ app.post('/api/ai/online', optionalAuth, aiRateLimiter, async (request, response
       record = matchedRecord;
     }
 
-    const curriculum = record ? JSON.stringify({
-      subject: record.subject,
-      topic: record.topic,
-      subtopics: record.subtopics,
-      lesson: record.lesson,
-      practice_questions: record.practice_questions
-    }) : 'No matching lesson was selected.';
+    const curriculum = record ? [
+      `Subject: ${record.subject}`,
+      `Topic: ${record.topic}`,
+      record.subtopics?.length ? `Subtopics: ${record.subtopics.join(', ')}` : '',
+      record.lesson?.key_points?.length ? `Key Points: ${record.lesson.key_points.slice(0, 5).join('; ')}` : ''
+    ].filter(Boolean).join('\n') : 'Standard Nigerian secondary school curriculum';
 
-    const upstream = await fetch(onlineAiConfig.url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${onlineAiConfig.key}`
-      },
-      body: JSON.stringify({
-        model: onlineAiConfig.model,
-        temperature: 0.3,
-        messages: [
-          {
-            role: 'system',
-            content: 'You are an educational tutor for secondary school students. Answer the student\'s question clearly, encouragingly, and accurately using the curriculum context when available. If the curriculum does not cover the topic, answer accurately using standard secondary school syllabus facts. Be concise, well-structured, and easy to understand.'
-          },
-          {
-            role: 'user',
-            content: `--- BEGIN CURRICULUM CONTEXT ---\n${curriculum}\n--- END CURRICULUM CONTEXT ---\n\nStudent question:\n${question}`
+    let upstream;
+    let lastError = null;
+    let usedModel = onlineAiConfig.model || 'gemini-flash-lite-latest';
+    const modelsToTry = [
+      onlineAiConfig.model,
+      'gemini-flash-lite-latest',
+      'gemini-3.1-flash-lite',
+      'gemini-3.5-flash-lite'
+    ];
+    const uniqueModels = [...new Set(modelsToTry.filter(Boolean))];
+
+    for (const modelName of uniqueModels) {
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+          upstream = await postJsonHttps(
+            onlineAiConfig.url,
+            {
+              Authorization: `Bearer ${onlineAiConfig.key}`,
+              'x-goog-api-key': onlineAiConfig.key
+            },
+            {
+              model: modelName,
+              temperature: 0.5,
+              messages: [
+                {
+                  role: 'system',
+                  content: 'You are an engaging, supportive, and knowledgeable educational tutor for secondary school students. When explaining concepts and answering questions:\n1. Storytelling & Relatable Scenarios: Use vivid mini-stories, relatable everyday terms, and practical real-life examples (e.g., market trading, sports, cooking, mechanics, everyday household occurrences) to make complex concepts simple and memorable.\n2. Professional & Academic Rigor: Never lose or dilute the official scientific or academic terms, definitions, formulas, or principles. Always introduce and explain the professional terminology clearly alongside your relatable examples so students master both the concept and the correct exam syllabus vocabulary.\n3. Tone & Formatting: Be welcoming, encouraging, and natural (never robotic). Use clear structure with Markdown headings, bullet points, numbered steps, comparison tables, and highlighted formulas where applicable.'
+                },
+                {
+                  role: 'user',
+                  content: `--- BEGIN CURRICULUM CONTEXT ---\n${curriculum}\n--- END CURRICULUM CONTEXT ---\n\nStudent question:\n${question}`
+                }
+              ]
+            },
+            25000
+          );
+
+          if (upstream.ok) {
+            usedModel = modelName;
+            break;
           }
-        ]
-      })
-    });
 
-    if (!upstream.ok) {
-      let detail = `Provider returned HTTP ${upstream.status}`;
+          if (upstream.status === 503 || upstream.status === 404) {
+            console.warn(`[AI] Model ${modelName} returned HTTP ${upstream.status}, trying fallback model...`);
+            break;
+          }
+        } catch (netErr) {
+          lastError = netErr;
+          console.warn(`[AI] Attempt ${attempt} for model ${modelName} failed (${netErr.message}), retrying...`);
+          await new Promise((r) => setTimeout(r, 1000));
+        }
+      }
+      if (upstream && upstream.ok) break;
+    }
+
+    if (!upstream || !upstream.ok) {
+      let detail = upstream ? `Provider returned HTTP ${upstream.status}` : (lastError?.message || 'Network timeout');
       try {
-        const errorBody = await upstream.json();
-        detail = errorBody?.error?.message || errorBody?.message || detail;
+        if (upstream) {
+          const errorBody = await upstream.json();
+          detail = errorBody?.error?.message || errorBody?.message || detail;
+        }
       } catch {}
       response.status(502).json({ error: `Online AI error: ${detail}` });
       return;
@@ -516,7 +536,7 @@ app.post('/api/ai/online', optionalAuth, aiRateLimiter, async (request, response
 
     response.json({
       answer,
-      model: onlineAiConfig.model,
+      model: usedModel,
       provider: onlineAiConfig.provider,
       context: {
         subject: record?.subject || requestedSubject,
@@ -777,5 +797,5 @@ app.use((error, _request, response, _next) => {
 
 // Start the local-first HTTP server.
 app.listen(port, () => {
-  console.log(`Local-first study app running at http://localhost:${port}`);
+  console.log(`BRAVOH running at http://localhost:${port}`);
 });

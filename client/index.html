@@ -4,7 +4,7 @@
     <!-- Document metadata and external resources. -->
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>E-study app</title>
+    <title>BRAVOH</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
@@ -155,13 +155,10 @@
               <h1>AI Tutor</h1>
               <p>Ask about any topic you're studying</p>
             </div>
-            <button type="button" class="ai-settings-btn" id="ai-settings-btn" title="Configure AI Tutor (API Key)" aria-label="Configure AI Tutor">
-              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1Z"></path></svg>
-            </button>
           </header>
 
           <div class="chat-area">
-            <div class="chat-message">
+            <div class="chat-message" id="ai-welcome-msg">
               Ask me anything about what you're studying.
               <br /><br />
               I can help with any subject — Mathematics, Biology, Chemistry, Physics, English, Economics, Government, Geography, and more.
@@ -308,61 +305,6 @@
             AI Tutor
           </button>
         </nav>
-
-        <!-- AI Tutor Configuration Modal -->
-        <div class="ai-modal" id="ai-modal" aria-hidden="true" role="dialog" aria-labelledby="ai-modal-title">
-          <div class="ai-modal-backdrop" id="ai-modal-backdrop"></div>
-          <div class="ai-modal-dialog">
-            <div class="ai-modal-header">
-              <h2 id="ai-modal-title">Online AI Settings</h2>
-              <button type="button" class="ai-modal-close" id="ai-modal-close" aria-label="Close dialog">&times;</button>
-            </div>
-            <form id="ai-config-form" class="ai-modal-body">
-              <p class="ai-modal-desc">
-                Connect your AI API key for live online answers. When inactive or offline, the smart offline tutor will answer using local curriculum intelligence.
-              </p>
-
-              <div class="ai-form-group">
-                <label for="ai-provider-select">AI Provider</label>
-                <select id="ai-provider-select" name="provider">
-                  <option value="gemini">Google Gemini (Recommended - Free)</option>
-                  <option value="groq">Groq (Ultra-fast - Free)</option>
-                  <option value="openai">OpenAI (ChatGPT)</option>
-                  <option value="openrouter">OpenRouter (Free & Paid)</option>
-                  <option value="custom">Custom OpenAI-compatible API</option>
-                </select>
-              </div>
-
-              <div class="ai-form-group" id="ai-custom-url-group" style="display: none;">
-                <label for="ai-custom-url">API Endpoint URL</label>
-                <input type="url" id="ai-custom-url" name="url" placeholder="https://api.openai.com/v1/chat/completions" />
-              </div>
-
-              <div class="ai-form-group" id="ai-custom-model-group" style="display: none;">
-                <label for="ai-custom-model">Model ID</label>
-                <input type="text" id="ai-custom-model" name="model" placeholder="gpt-4o-mini" />
-              </div>
-
-              <div class="ai-form-group">
-                <label for="ai-key-input">API Key</label>
-                <div class="ai-key-wrap">
-                  <input type="password" id="ai-key-input" name="key" placeholder="Paste your API key here..." autocomplete="off" />
-                  <button type="button" id="ai-key-toggle" class="ai-key-toggle-btn" aria-label="Toggle visibility">👁️</button>
-                </div>
-                <p class="ai-modal-hint" id="ai-provider-hint">
-                  Get a free key from <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer">Google AI Studio</a>.
-                </p>
-              </div>
-
-              <div class="form-message" id="ai-config-message"></div>
-
-              <div class="ai-modal-actions">
-                <button type="button" class="action-btn secondary" id="ai-clear-btn">Clear Key</button>
-                <button type="submit" class="action-btn primary" id="ai-save-btn">Test & Save</button>
-              </div>
-            </form>
-          </div>
-        </div>
       </div>
     </main>
 

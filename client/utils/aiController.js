@@ -1,7 +1,7 @@
 import { requestJson } from './api.js';
 import { generateAiTutorResponse } from './ai.js';
 
-const ONLINE_TIMEOUT_MS = 8000;
+const ONLINE_TIMEOUT_MS = 25000;
 
 function canTryOnline() {
   return typeof navigator === 'undefined' || navigator.onLine !== false;

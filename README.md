@@ -14,18 +14,26 @@ npm start
 
 Open http://localhost:3000.
 
-### SQLite database
+### Database: Managed PostgreSQL & Local SQLite
 
-User accounts and login sessions are stored in `data/study.sqlite`. The database is created automatically when the server starts, and passwords are stored as secure `scrypt` hashes.
+The app supports **Managed PostgreSQL** (Neon, Supabase, Render Postgres) for durable production hosting, and falls back to **SQLite** (`data/study.sqlite`) for offline local development.
 
-To use another database location, set `DATABASE_PATH` before starting the server:
+#### Production (Render / Neon / Supabase):
+1. Create a free PostgreSQL database on [Neon.tech](https://neon.tech) or [Supabase.com](https://supabase.com).
+2. Set the `DATABASE_URL` environment variable on Render (e.g. `postgresql://user:pass@host/dbname?sslmode=require`).
+3. Migrate your local SQLite data to PostgreSQL:
+   ```powershell
+   cd server
+   npm run backup
+   npm run migrate:pg -- "YOUR_DATABASE_URL"
+   ```
 
+#### Local Development:
+If `DATABASE_URL` is omitted, the server automatically uses local SQLite (`data/study.sqlite`). To set a custom SQLite path:
 ```powershell
 $env:DATABASE_PATH = 'D:\persistent-data\study.sqlite'
 npm start
 ```
-
-For hosting, configure `DATABASE_PATH` to a mounted persistent disk. Without persistent storage, the database will be lost when the host recreates the service.
 
 ### Local-first behavior
 

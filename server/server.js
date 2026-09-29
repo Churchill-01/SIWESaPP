@@ -1,5 +1,5 @@
 import express from 'express';
-import Database from 'better-sqlite3';
+import * as db from './db.js';
 import { mkdirSync, readFileSync, writeFileSync, existsSync, statSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { promisify } from 'node:util';
@@ -205,46 +205,8 @@ app.use(express.json());
 
 let catalogCache = null;
 let catalogMtime = 0;
-// Ensure the database directory exists before opening SQLite.
-mkdirSync(path.dirname(databasePath), { recursive: true });
-const database = new Database(databasePath);
-database.pragma('journal_mode = WAL');
-database.pragma('foreign_keys = ON');
-
-// Create user, session, and progress tables on first launch.
-database.exec(`
-  CREATE TABLE IF NOT EXISTS users (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    email TEXT NOT NULL UNIQUE,
-    password_hash TEXT NOT NULL,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-  );
-
-  CREATE TABLE IF NOT EXISTS sessions (
-    token TEXT PRIMARY KEY,
-    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    expires_at TEXT
-  );
-
-  CREATE TABLE IF NOT EXISTS user_progress (
-    id TEXT PRIMARY KEY,
-    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    subject TEXT NOT NULL,
-    topic TEXT NOT NULL,
-    score INTEGER NOT NULL,
-    total_questions INTEGER NOT NULL,
-    completed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(user_id, subject, topic)
-  );
-`);
-
-// Ensure sessions table has expires_at column if created by an older version.
-const sessionColumns = database.pragma('table_info(sessions)');
-if (!sessionColumns.some((col) => col.name === 'expires_at')) {
-  database.exec('ALTER TABLE sessions ADD COLUMN expires_at TEXT');
-}
+// Initialize database (PostgreSQL if DATABASE_URL is set, otherwise SQLite fallback)
+await db.initDatabase();
 
 async function readCatalog() {
   // Read and cache the subject catalog, reloading automatically if the file on disk is modified.
@@ -296,11 +258,11 @@ async function verifyPassword(password, storedHash) {
   return storedKey.length === derivedKey.length && timingSafeEqual(storedKey, derivedKey);
 }
 
-function createSession(user) {
+async function createSession(user) {
   // Store a token linked to the user with an expiration timestamp and return it.
   const token = createToken();
   const expiresAt = new Date(Date.now() + SESSION_TTL_DAYS * 24 * 60 * 60 * 1000).toISOString();
-  database.prepare('INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)').run(token, user.id, expiresAt);
+  await db.createSession({ token, userId: user.id, expiresAt });
   return token;
 }
 
@@ -310,41 +272,42 @@ function extractToken(request) {
   return match ? match[1] : null;
 }
 
-function getSessionUser(token) {
+async function getSessionUser(token) {
   if (!token) return null;
-  const now = new Date().toISOString();
-  const row = database.prepare(`
-    SELECT u.id, u.name, u.email, s.token, s.expires_at
-    FROM sessions s
-    JOIN users u ON s.user_id = u.id
-    WHERE s.token = ? AND (s.expires_at IS NULL OR s.expires_at > ?)
-  `).get(token, now);
-  return row ? { id: row.id, name: row.name, email: row.email } : null;
+  return await db.getSessionUser(token);
 }
 
-function requireAuth(request, response, next) {
-  const token = extractToken(request);
-  if (!token) {
-    response.status(401).json({ error: 'Authentication required' });
-    return;
-  }
-  const user = getSessionUser(token);
-  if (!user) {
-    response.status(401).json({ error: 'Invalid or expired session token' });
-    return;
-  }
-  request.user = user;
-  request.token = token;
-  next();
-}
-
-function optionalAuth(request, _response, next) {
-  const token = extractToken(request);
-  if (token) {
-    request.user = getSessionUser(token);
+async function requireAuth(request, response, next) {
+  try {
+    const token = extractToken(request);
+    if (!token) {
+      response.status(401).json({ error: 'Authentication required' });
+      return;
+    }
+    const user = await getSessionUser(token);
+    if (!user) {
+      response.status(401).json({ error: 'Invalid or expired session token' });
+      return;
+    }
+    request.user = user;
     request.token = token;
+    next();
+  } catch (err) {
+    next(err);
   }
-  next();
+}
+
+async function optionalAuth(request, _response, next) {
+  try {
+    const token = extractToken(request);
+    if (token) {
+      request.user = await getSessionUser(token);
+      request.token = token;
+    }
+    next();
+  } catch (err) {
+    next(err);
+  }
 }
 
 // In-memory sliding window rate limiter
@@ -386,9 +349,13 @@ const aiRateLimiter = createRateLimiter(60 * 1000, 20, 'AI tutor request limit r
 // Email validation helper
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-// Lightweight health endpoint for local server checks.
+// Lightweight health endpoint for server checks.
 app.get('/api/health', (_request, response) => {
-  response.json({ status: 'ok', mode: 'local-first' });
+  response.json({
+    status: 'ok',
+    mode: 'local-first',
+    database: db.getDatabaseInfo().type
+  });
 });
 
 // Explicit route to serve subjects.json with correct application/json header for Service Worker caching
@@ -568,25 +535,29 @@ app.post('/api/auth/register', authRateLimiter, async (request, response, next) 
     return;
   }
 
-  const existingUser = database.prepare('SELECT id FROM users WHERE email = ?').get(trimmedEmail);
-  if (existingUser) {
-    response.status(409).json({ error: 'An account with this email already exists.' });
-    return;
-  }
-
   try {
+    const existingUser = await db.findUserByEmail(trimmedEmail);
+    if (existingUser) {
+      response.status(409).json({ error: 'An account with this email already exists.' });
+      return;
+    }
+
     const user = {
       id: randomUUID(),
       name: trimmedName,
       email: trimmedEmail
     };
     const passwordHash = await hashPassword(trimmedPassword);
-    database.prepare(
-      'INSERT INTO users (id, name, email, password_hash) VALUES (?, ?, ?, ?)'
-    ).run(user.id, user.name, user.email, passwordHash);
+    await db.createUser({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      passwordHash
+    });
 
+    const token = await createSession(user);
     response.status(201).json({
-      token: createSession(user),
+      token,
       user: sanitizeUser(user)
     });
   } catch (error) {
@@ -606,9 +577,7 @@ app.post('/api/auth/login', authRateLimiter, async (request, response, next) => 
   }
 
   try {
-    const user = database.prepare(
-      'SELECT id, name, email, password_hash FROM users WHERE email = ?'
-    ).get(trimmedEmail);
+    const user = await db.findUserByEmail(trimmedEmail);
     const passwordMatches = user && await verifyPassword(trimmedPassword, user.password_hash);
 
     if (!passwordMatches) {
@@ -616,8 +585,9 @@ app.post('/api/auth/login', authRateLimiter, async (request, response, next) => 
       return;
     }
 
+    const token = await createSession(user);
     response.json({
-      token: createSession(user),
+      token,
       user: sanitizeUser(user)
     });
   } catch (error) {
@@ -626,9 +596,13 @@ app.post('/api/auth/login', authRateLimiter, async (request, response, next) => 
 });
 
 // End the current session and remove the token.
-app.post('/api/auth/logout', requireAuth, (request, response) => {
-  database.prepare('DELETE FROM sessions WHERE token = ?').run(request.token);
-  response.json({ message: 'Logged out successfully.' });
+app.post('/api/auth/logout', requireAuth, async (request, response, next) => {
+  try {
+    await db.deleteSession(request.token);
+    response.json({ message: 'Logged out successfully.' });
+  } catch (error) {
+    next(error);
+  }
 });
 
 // Return current authenticated user profile.
@@ -637,14 +611,9 @@ app.get('/api/auth/me', requireAuth, (request, response) => {
 });
 
 // Retrieve student's saved quiz progress.
-app.get('/api/progress', requireAuth, (request, response, next) => {
+app.get('/api/progress', requireAuth, async (request, response, next) => {
   try {
-    const records = database.prepare(`
-      SELECT subject, topic, score, total_questions, completed_at
-      FROM user_progress
-      WHERE user_id = ?
-      ORDER BY completed_at DESC
-    `).all(request.user.id);
+    const records = await db.getUserProgress(request.user.id);
     response.json({ progress: records });
   } catch (error) {
     next(error);
@@ -652,7 +621,7 @@ app.get('/api/progress', requireAuth, (request, response, next) => {
 });
 
 // Record or update a student's quiz progress for a subject and topic.
-app.post('/api/progress', requireAuth, (request, response, next) => {
+app.post('/api/progress', requireAuth, async (request, response, next) => {
   try {
     const { subject, topic, score, total } = request.body || {};
     const trimmedSubject = String(subject || '').trim();
@@ -665,14 +634,14 @@ app.post('/api/progress', requireAuth, (request, response, next) => {
       return;
     }
 
-    database.prepare(`
-      INSERT INTO user_progress (id, user_id, subject, topic, score, total_questions, completed_at)
-      VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
-      ON CONFLICT(user_id, subject, topic) DO UPDATE SET
-        score = excluded.score,
-        total_questions = excluded.total_questions,
-        completed_at = datetime('now')
-    `).run(randomUUID(), request.user.id, trimmedSubject, trimmedTopic, numScore, numTotal);
+    await db.saveUserProgress({
+      id: randomUUID(),
+      userId: request.user.id,
+      subject: trimmedSubject,
+      topic: trimmedTopic,
+      score: numScore,
+      total: numTotal
+    });
 
     response.json({
       status: 'ok',
@@ -742,7 +711,7 @@ app.get('/api/subjects/:subject/topics/:topic', async (request, response, next) 
 });
 
 // Local developer inspection endpoint to view accounts, sessions, and progress in browser
-app.get('/api/admin/overview', (request, response) => {
+app.get('/api/admin/overview', async (request, response) => {
   const ip = request.ip || request.socket.remoteAddress || '';
   const isLocal = ['127.0.0.1', '::1', '::ffff:127.0.0.1', 'localhost'].includes(request.hostname)
     || ip.includes('127.0.0.1') || ip === '::1';
@@ -752,28 +721,21 @@ app.get('/api/admin/overview', (request, response) => {
     return;
   }
 
-  const users = database.prepare('SELECT id, name, email, created_at FROM users ORDER BY created_at DESC').all();
-  const sessions = database.prepare(`
-    SELECT s.token, s.user_id, u.name, u.email, s.created_at, s.expires_at 
-    FROM sessions s 
-    JOIN users u ON s.user_id = u.id
-    ORDER BY s.created_at DESC
-  `).all();
-  const progress = database.prepare(`
-    SELECT u.name, u.email, p.subject, p.topic, p.score, p.total_questions, p.completed_at 
-    FROM user_progress p 
-    JOIN users u ON p.user_id = u.id
-    ORDER BY p.completed_at DESC
-  `).all();
+  try {
+    const { users, sessions, progress } = await db.getAdminOverview();
+    const dbInfo = db.getDatabaseInfo();
 
-  response.json({
-    databasePath,
-    totalUsers: users.length,
-    totalSessions: sessions.length,
-    users,
-    sessions,
-    progress
-  });
+    response.json({
+      database: dbInfo,
+      totalUsers: users.length,
+      totalSessions: sessions.length,
+      users,
+      sessions,
+      progress
+    });
+  } catch (err) {
+    response.status(500).json({ error: err.message });
+  }
 });
 
 // Serve the static client after API routes have been registered.

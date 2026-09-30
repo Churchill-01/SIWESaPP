@@ -3,20 +3,27 @@ import { getToken, saveToken, getUser, saveUser, clearAuth } from './utils/auth.
 import { state } from './utils/state.js';
 import { askTutor } from './utils/aiController.js';
 
-// Offline fallback catalog used before the server catalog is available.
+// Offline fallback catalog matching curriculum subjects
 const fallbackSubjects = [
-  ['Mathematics', '6 topics', 'math', 'calculator'],
-  ['Biology', '5 topics', 'biology', 'leaf'],
-  ['Chemistry', '4 topics', 'chemistry', 'flask'],
-  ['Physics', '5 topics', 'physics', 'atom'],
-  ['English Language', '5 topics', 'english', 'book'],
-  ['Economics', '4 topics', 'economics', 'chart'],
-  ['Government', '4 topics', 'government', 'scales'],
-  ['Geography', '4 topics', 'geography', 'globe']
+  ['Mathematics', '10 topics', 'math', 'calculator'],
+  ['Physics', '10 topics', 'physics', 'atom'],
+  ['Chemistry', '10 topics', 'chemistry', 'flask'],
+  ['Biology', '10 topics', 'biology', 'leaf']
 ];
 
-// Offline fallback topics and suggested AI prompts.
-const fallbackTopics = ['Number Bases', 'Algebraic Expressions', 'Linear Equations', 'Quadratic Equations', 'Geometry', 'Statistics'];
+// Offline fallback topics matching curriculum records
+const fallbackTopics = [
+  'Logic',
+  'Surds and Trigonometry',
+  'Matrices and Determinants',
+  'Linear and Quadratic Equations',
+  'Financial Mathematics',
+  'Longitude and Latitude',
+  'Coordinate Geometry',
+  'Construction and Loci',
+  'Differentiation',
+  'Integration'
+];
 const prompts = ['Explain photosynthesis simply', 'How do I solve quadratic equations?', 'What is the difference between acids and bases?', 'What is a proposition in logic?'];
 // Navigation aliases and visual metadata used while rendering subjects.
 const screenAliases = { learn: 'subjects', quiz: 'quiz-subjects' };
@@ -173,8 +180,38 @@ function renderTopics(query = '') {
 
 function renderLesson() {
   // Fill the topic detail and lesson screens from the selected record.
-  const record = state.subjectRecords.find((item) => item.subject === state.selectedSubject && item.topic === state.selectedTopic);
-  if (!record) return;
+  const record = state.subjectRecords.find(
+    (item) => item.subject === state.selectedSubject && item.topic === state.selectedTopic
+  );
+
+  const topicDetailContainer = document.querySelector('#topic-detail-content');
+  const lessonContainer = document.querySelector('#lesson-content');
+
+  if (!record) {
+    if (topicDetailContainer) {
+      topicDetailContainer.innerHTML = `
+        <h1>${state.selectedTopic || 'Selected Topic'}</h1>
+        <p class="description">Loading topic materials for ${state.selectedSubject}...</p>
+        <div class="about-box" style="margin-top: 16px;">
+          <h2>TOPIC OVERVIEW</h2>
+          <p style="color: var(--text-secondary); margin-bottom: 12px;">Connecting to curriculum records...</p>
+          <button class="primary-button" data-screen-target="learning">Start learning</button>
+        </div>
+      `;
+    }
+    // Attempt on-demand fetch for this specific topic
+    if (state.selectedSubject && state.selectedTopic) {
+      requestJson(`/api/subjects/${encodeURIComponent(state.selectedSubject)}/topics/${encodeURIComponent(state.selectedTopic)}`)
+        .then((fetchedRecord) => {
+          if (fetchedRecord && fetchedRecord.topic) {
+            state.subjectRecords.push(fetchedRecord);
+            renderLesson();
+          }
+        })
+        .catch(() => {});
+    }
+    return;
+  }
 
   const lesson = record.lesson || {};
   const points = (lesson.key_points || []).map((point) => `<li>${point}</li>`).join('');
@@ -221,24 +258,29 @@ function renderLesson() {
   ` : '';
 
   const workedExampleHtml = formatWorkedExampleHtml(lesson.worked_example);
+  const subtopicsHtml = Array.isArray(record.subtopics) && record.subtopics.length > 0
+    ? record.subtopics.map((item) => `<li>${item}</li>`).join('')
+    : (points || '<li>Standard WAEC/NECO syllabus content</li>');
 
-  document.querySelector('#topic-detail-content').innerHTML = `
-    <h1>${record.topic}</h1>
-    <p class="description" style="line-height: 1.6;">${lesson.introduction || ''}</p>
-    <button class="primary-button" data-screen-target="learning">Start learning</button>
-    <div class="detail-actions">
-      <button class="outline-button" data-screen-target="ai">${icon('spark')} <span>Ask AI</span></button>
-      <button class="outline-button" data-screen-target="quiz-question">${icon('quiz')} <span>Take quiz</span></button>
-    </div>
-    <div class="about-box">
-      <h2>SUBTOPICS</h2>
-      <ul>${(record.subtopics || points).map((item) => `<li>${item}</li>`).join('')}</ul>
-    </div>
-    <div class="questions">
-      <h2>PRACTICE QUESTIONS</h2>
-      <div id="common-questions">${questions}</div>
-    </div>
-  `;
+  if (topicDetailContainer) {
+    topicDetailContainer.innerHTML = `
+      <h1>${record.topic}</h1>
+      <p class="description" style="line-height: 1.6;">${lesson.introduction || ''}</p>
+      <button class="primary-button" data-screen-target="learning">Start learning</button>
+      <div class="detail-actions">
+        <button class="outline-button" data-screen-target="ai">${icon('spark')} <span>Ask AI</span></button>
+        <button class="outline-button" data-screen-target="quiz-question">${icon('quiz')} <span>Take quiz</span></button>
+      </div>
+      <div class="about-box">
+        <h2>SUBTOPICS</h2>
+        <ul>${subtopicsHtml}</ul>
+      </div>
+      <div class="questions">
+        <h2>PRACTICE QUESTIONS</h2>
+        <div id="common-questions">${questions || '<p style="color: var(--text-secondary); padding: 8px 0;">Practice questions are available in the quiz section.</p>'}</div>
+      </div>
+    `;
+  }
 
   const lessonSubject = document.querySelector('#lesson-subject');
   if (lessonSubject) lessonSubject.textContent = state.selectedSubject.toUpperCase();
@@ -1165,61 +1207,66 @@ function updateAuthUi() {
   }
 }
 
+function applyCatalog(catalog) {
+  state.subjectRecords = catalog.records || [];
+  state.subjects = (catalog.subjects || []).map((name, index) => [
+    name,
+    `${new Set(state.subjectRecords.filter((record) => record.subject === name).map((record) => record.topic)).size} topics`,
+    subjectStyles[index % subjectStyles.length],
+    subjectIcons[index % subjectIcons.length]
+  ]);
+  state.topics = [...new Set(state.subjectRecords.filter((record) => record.subject === state.selectedSubject).map((record) => record.topic))];
+  if (state.topics.length === 0 && state.subjectRecords.length > 0) {
+    state.selectedSubject = state.subjectRecords[0].subject;
+    state.topics = [...new Set(state.subjectRecords.filter((record) => record.subject === state.selectedSubject).map((record) => record.topic))];
+  }
+  if (!state.topics.includes(state.selectedTopic) && state.topics.length > 0) {
+    state.selectedTopic = state.topics[0];
+  }
+  renderSubjects();
+  renderLesson();
+}
+
 function loadCatalog() {
   // Load the live catalog, falling back to the cached catalog on failure.
   const catalogPath = `/api/catalog?t=${Date.now()}`;
 
   requestJson(catalogPath)
     .then((catalog) => {
-      state.subjectRecords = catalog.records || [];
-      state.subjects = (catalog.subjects || []).map((name, index) => [
-        name,
-        `${new Set(state.subjectRecords.filter((record) => record.subject === name).map((record) => record.topic)).size} topics`,
-        subjectStyles[index % subjectStyles.length],
-        subjectIcons[index % subjectIcons.length]
-      ]);
-      state.topics = [...new Set(state.subjectRecords.filter((record) => record.subject === state.selectedSubject).map((record) => record.topic))];
-      if (state.topics.length === 0 && state.subjectRecords.length > 0) {
-        state.selectedSubject = state.subjectRecords[0].subject;
-        state.topics = [...new Set(state.subjectRecords.filter((record) => record.subject === state.selectedSubject).map((record) => record.topic))];
+      if (catalog && Array.isArray(catalog.records) && catalog.records.length > 0) {
+        applyCatalog(catalog);
+      } else {
+        throw new Error('Incomplete catalog payload');
       }
-      if (!state.topics.includes(state.selectedTopic) && state.topics.length > 0) {
-        state.selectedTopic = state.topics[0];
-      }
-      renderSubjects();
     })
-    .catch(() => loadCachedCatalog());
+    .catch((err) => {
+      console.warn('[catalog] Live catalog fetch failed, loading local/cached catalog:', err.message);
+      loadCachedCatalog();
+    });
 }
 
 function loadCachedCatalog() {
-  // Load the bundled JSON catalog when the API cannot be reached.
-  const catalogPath = `/subjects.json?t=${Date.now()}`;
+  // Try local relative subjects.json first, then fallback to root /subjects.json
+  const fetchLocal = () => fetch(`./subjects.json?t=${Date.now()}`);
+  const fetchRoot = () => fetch(`/subjects.json?t=${Date.now()}`);
 
-  fetch(catalogPath)
+  fetchLocal()
+    .catch(fetchRoot)
     .then((response) => (response.ok ? response.json() : Promise.reject(new Error('Cached catalog unavailable'))))
     .then((catalog) => {
-      state.subjectRecords = catalog.records || [];
-      state.subjects = (catalog.subjects || []).map((name, index) => [
-        name,
-        `${new Set(state.subjectRecords.filter((record) => record.subject === name).map((record) => record.topic)).size} topics`,
-        subjectStyles[index % subjectStyles.length],
-        subjectIcons[index % subjectIcons.length]
-      ]);
-      state.topics = [...new Set(state.subjectRecords.filter((record) => record.subject === state.selectedSubject).map((record) => record.topic))];
-      if (state.topics.length === 0 && state.subjectRecords.length > 0) {
-        state.selectedSubject = state.subjectRecords[0].subject;
-        state.topics = [...new Set(state.subjectRecords.filter((record) => record.subject === state.selectedSubject).map((record) => record.topic))];
+      if (catalog && Array.isArray(catalog.records) && catalog.records.length > 0) {
+        applyCatalog(catalog);
+      } else {
+        throw new Error('Invalid cached catalog format');
       }
-      if (!state.topics.includes(state.selectedTopic) && state.topics.length > 0) {
-        state.selectedTopic = state.topics[0];
-      }
-      renderSubjects();
     })
-    .catch(() => {
+    .catch((err) => {
+      console.warn('[catalog] Could not load JSON catalog, using syllabus fallbacks:', err.message);
       state.subjectRecords = [];
       state.subjects = fallbackSubjects;
       state.topics = fallbackTopics;
       renderSubjects();
+      renderLesson();
     });
 }
 

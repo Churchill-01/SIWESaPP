@@ -11,6 +11,7 @@ const defaultSqlitePath = process.env.DATABASE_PATH || path.join(dataRoot, 'stud
 let pool = null;
 let sqliteDb = null;
 let activeEngine = 'none';
+let lastDbError = null;
 
 function sanitizeConnectionUrl(url) {
   if (!url) return '';
@@ -29,84 +30,107 @@ export function getDatabaseInfo() {
   if (activeEngine === 'postgres') {
     return {
       type: 'postgres',
+      status: 'connected',
       connection: sanitizeConnectionUrl(process.env.DATABASE_URL)
     };
   }
   if (activeEngine === 'sqlite') {
     return {
       type: 'sqlite',
+      status: 'connected',
       path: defaultSqlitePath
     };
   }
-  return { type: 'uninitialized' };
+  return {
+    type: activeEngine,
+    status: activeEngine === 'none' ? 'not_configured' : 'error',
+    error: lastDbError
+  };
+}
+
+function checkDbReady() {
+  if (activeEngine === 'postgres' && pool) return 'postgres';
+  if (activeEngine === 'sqlite' && sqliteDb) return 'sqlite';
+  throw new Error(
+    `Database is not connected (${lastDbError || 'no active engine'}). ` +
+    'Please set DATABASE_URL (PostgreSQL) in your Render environment variables.'
+  );
 }
 
 export async function initDatabase() {
   const databaseUrl = process.env.DATABASE_URL?.trim();
 
+  // ----------------------------------------------------
+  // 1. Try PostgreSQL Mode (Render, Neon, Supabase)
+  // ----------------------------------------------------
   if (databaseUrl && (databaseUrl.startsWith('postgres://') || databaseUrl.startsWith('postgresql://'))) {
-    // ----------------------------------------------------
-    // PostgreSQL Mode (Render, Neon, Supabase, etc.)
-    // ----------------------------------------------------
-    const isLocalhost = databaseUrl.includes('localhost') || databaseUrl.includes('127.0.0.1');
-    const sslConfig = isLocalhost ? false : { rejectUnauthorized: false };
-
-    pool = new pg.Pool({
-      connectionString: databaseUrl,
-      ssl: sslConfig,
-      max: 10,
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 10000
-    });
-
-    pool.on('error', (err) => {
-      console.error('[db:pg] Unexpected error on idle PostgreSQL client:', err.message);
-    });
-
-    // Test connection and initialize tables
-    const client = await pool.connect();
     try {
-      await client.query(`
-        CREATE TABLE IF NOT EXISTS users (
-          id TEXT PRIMARY KEY,
-          name TEXT NOT NULL,
-          email TEXT NOT NULL UNIQUE,
-          password_hash TEXT NOT NULL,
-          created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
-        );
+      const isLocalhost = databaseUrl.includes('localhost') || databaseUrl.includes('127.0.0.1');
+      const sslConfig = isLocalhost ? false : { rejectUnauthorized: false };
 
-        CREATE TABLE IF NOT EXISTS sessions (
-          token TEXT PRIMARY KEY,
-          user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-          created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          expires_at TIMESTAMPTZ
-        );
+      pool = new pg.Pool({
+        connectionString: databaseUrl,
+        ssl: sslConfig,
+        max: 10,
+        idleTimeoutMillis: 30000,
+        connectionTimeoutMillis: 10000
+      });
 
-        CREATE TABLE IF NOT EXISTS user_progress (
-          id TEXT PRIMARY KEY,
-          user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-          subject TEXT NOT NULL,
-          topic TEXT NOT NULL,
-          score INTEGER NOT NULL,
-          total_questions INTEGER NOT NULL,
-          completed_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          UNIQUE(user_id, subject, topic)
-        );
+      pool.on('error', (err) => {
+        console.error('[db:pg] Unexpected error on idle client:', err.message);
+      });
 
-        CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token);
-        CREATE INDEX IF NOT EXISTS idx_user_progress_user ON user_progress(user_id);
-      `);
+      const client = await pool.connect();
+      try {
+        await client.query(`
+          CREATE TABLE IF NOT EXISTS users (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            email TEXT NOT NULL UNIQUE,
+            password_hash TEXT NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+          );
 
-      activeEngine = 'postgres';
-      console.log(`[db] Initialized PostgreSQL connection: ${sanitizeConnectionUrl(databaseUrl)}`);
-    } finally {
-      client.release();
+          CREATE TABLE IF NOT EXISTS sessions (
+            token TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            expires_at TIMESTAMPTZ
+          );
+
+          CREATE TABLE IF NOT EXISTS user_progress (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            subject TEXT NOT NULL,
+            topic TEXT NOT NULL,
+            score INTEGER NOT NULL,
+            total_questions INTEGER NOT NULL,
+            completed_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(user_id, subject, topic)
+          );
+
+          CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token);
+          CREATE INDEX IF NOT EXISTS idx_user_progress_user ON user_progress(user_id);
+        `);
+
+        activeEngine = 'postgres';
+        lastDbError = null;
+        console.log(`[db] Connected to PostgreSQL: ${sanitizeConnectionUrl(databaseUrl)}`);
+        return;
+      } finally {
+        client.release();
+      }
+    } catch (pgErr) {
+      lastDbError = pgErr.message;
+      activeEngine = 'error';
+      console.warn(`[db:pg] Warning: PostgreSQL connection failed: ${pgErr.message}`);
+      console.warn('[db:pg] The server will still start so all lessons and curriculum materials remain fully accessible.');
+      return;
     }
-    return;
   }
 
   // ----------------------------------------------------
-  // SQLite Fallback Mode (Local offline development)
+  // 2. Try Local SQLite Fallback Mode (offline dev)
   // ----------------------------------------------------
   try {
     const { default: Database } = await import('better-sqlite3');
@@ -149,13 +173,14 @@ export async function initDatabase() {
     }
 
     activeEngine = 'sqlite';
+    lastDbError = null;
     console.log(`[db] Using local SQLite database at: ${defaultSqlitePath}`);
     console.log('[db] Tip: Set DATABASE_URL to connect to managed PostgreSQL (Neon / Supabase / Render).');
-  } catch (err) {
-    throw new Error(
-      `No DATABASE_URL set and failed to load SQLite: ${err.message}. ` +
-      'Please configure DATABASE_URL in your environment or .env file.'
-    );
+  } catch (sqliteErr) {
+    lastDbError = sqliteErr.message;
+    activeEngine = 'none';
+    console.warn(`[db] Running in offline/catalog-only mode: ${sqliteErr.message}`);
+    console.warn('[db] All course materials and lessons are functional. Set DATABASE_URL to enable account creation.');
   }
 }
 
@@ -164,8 +189,9 @@ export async function initDatabase() {
 // ---------------------------------------------------------------------------
 
 export async function findUserByEmail(email) {
+  const engine = checkDbReady();
   const normalizedEmail = email.trim().toLowerCase();
-  if (activeEngine === 'postgres') {
+  if (engine === 'postgres') {
     const { rows } = await pool.query(
       'SELECT id, name, email, password_hash, created_at FROM users WHERE email = $1',
       [normalizedEmail]
@@ -178,8 +204,9 @@ export async function findUserByEmail(email) {
 }
 
 export async function createUser({ id, name, email, passwordHash }) {
+  const engine = checkDbReady();
   const normalizedEmail = email.trim().toLowerCase();
-  if (activeEngine === 'postgres') {
+  if (engine === 'postgres') {
     await pool.query(
       'INSERT INTO users (id, name, email, password_hash) VALUES ($1, $2, $3, $4)',
       [id, name.trim(), normalizedEmail, passwordHash]
@@ -192,7 +219,8 @@ export async function createUser({ id, name, email, passwordHash }) {
 }
 
 export async function createSession({ token, userId, expiresAt }) {
-  if (activeEngine === 'postgres') {
+  const engine = checkDbReady();
+  if (engine === 'postgres') {
     await pool.query(
       'INSERT INTO sessions (token, user_id, expires_at) VALUES ($1, $2, $3)',
       [token, userId, expiresAt]
@@ -205,6 +233,7 @@ export async function createSession({ token, userId, expiresAt }) {
 }
 
 export async function getSessionUser(token) {
+  if (activeEngine !== 'postgres' && activeEngine !== 'sqlite') return null;
   const now = new Date().toISOString();
   if (activeEngine === 'postgres') {
     const { rows } = await pool.query(`
@@ -228,7 +257,8 @@ export async function getSessionUser(token) {
 }
 
 export async function deleteSession(token) {
-  if (activeEngine === 'postgres') {
+  const engine = checkDbReady();
+  if (engine === 'postgres') {
     await pool.query('DELETE FROM sessions WHERE token = $1', [token]);
     return;
   }
@@ -236,6 +266,7 @@ export async function deleteSession(token) {
 }
 
 export async function getUserProgress(userId) {
+  if (activeEngine !== 'postgres' && activeEngine !== 'sqlite') return [];
   if (activeEngine === 'postgres') {
     const { rows } = await pool.query(`
       SELECT subject, topic, score, total_questions, completed_at
@@ -254,7 +285,8 @@ export async function getUserProgress(userId) {
 }
 
 export async function saveUserProgress({ id, userId, subject, topic, score, total }) {
-  if (activeEngine === 'postgres') {
+  const engine = checkDbReady();
+  if (engine === 'postgres') {
     await pool.query(`
       INSERT INTO user_progress (id, user_id, subject, topic, score, total_questions, completed_at)
       VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)
@@ -276,6 +308,9 @@ export async function saveUserProgress({ id, userId, subject, topic, score, tota
 }
 
 export async function getAdminOverview() {
+  if (activeEngine !== 'postgres' && activeEngine !== 'sqlite') {
+    return { users: [], sessions: [], progress: [] };
+  }
   if (activeEngine === 'postgres') {
     const users = (await pool.query(
       'SELECT id, name, email, created_at FROM users ORDER BY created_at DESC'

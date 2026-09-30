@@ -1,5 +1,5 @@
 // Cache identifier and static files required to start the app offline.
-const CACHE_NAME = 'bravoh-app-v13';
+const CACHE_NAME = 'bravoh-app-v14';
 const APP_SHELL = [
   './',
   './index.html',
@@ -12,7 +12,7 @@ const APP_SHELL = [
   './utils/state.js',
   './utils/aiController.js',
   './utils/ai.js',
-  '/subjects.json'
+  './subjects.json'
 ];
 
 // Pre-cache the application shell during installation.

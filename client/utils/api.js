@@ -36,7 +36,16 @@ export async function requestJson(url, options = {}) {
     throw new Error(message || 'Request failed');
   }
 
-  return response.headers.get('content-type')?.includes('application/json') ? response.json() : response.text();
+  const contentType = response.headers.get('content-type') || '';
+  if (contentType.includes('application/json') || contentType.includes('json')) {
+    return response.json();
+  }
+  const text = await response.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
 }
 
 export async function fetchSubjects() {

@@ -159,13 +159,30 @@ const PROVIDER_PRESETS = {
 };
 
 
-const defaultProvider = process.env.ONLINE_AI_PROVIDER || 'gemini';
-const defaultPreset = PROVIDER_PRESETS[defaultProvider] || PROVIDER_PRESETS.gemini;
+// Automatically detect provider from available API keys if not explicitly set
+const detectedProvider = process.env.ONLINE_AI_PROVIDER
+  || (process.env.GROQ_API_KEY ? 'groq' : null)
+  || (process.env.OPENAI_API_KEY ? 'openai' : null)
+  || (process.env.OPENROUTER_API_KEY ? 'openrouter' : null)
+  || (process.env.GEMINI_API_KEY ? 'gemini' : null)
+  || 'gemini';
+
+const defaultPreset = PROVIDER_PRESETS[detectedProvider] || PROVIDER_PRESETS.gemini;
+
+const resolvedAiKey = (
+  process.env.ONLINE_AI_KEY
+  || process.env.GEMINI_API_KEY
+  || process.env.GROQ_API_KEY
+  || process.env.OPENAI_API_KEY
+  || process.env.OPENROUTER_API_KEY
+  || process.env.AI_API_KEY
+  || ''
+).trim();
 
 const onlineAiConfig = {
-  provider: defaultProvider,
+  provider: detectedProvider,
   url: process.env.ONLINE_AI_URL || defaultPreset.url,
-  key: process.env.ONLINE_AI_KEY || '',
+  key: resolvedAiKey,
   model: process.env.ONLINE_AI_MODEL || defaultPreset.model
 };
 

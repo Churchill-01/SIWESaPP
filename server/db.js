@@ -48,11 +48,19 @@ export function getDatabaseInfo() {
   };
 }
 
-function checkDbReady() {
+async function checkDbReady() {
   if (activeEngine === 'postgres' && pool) return 'postgres';
   if (activeEngine === 'sqlite' && sqliteDb) return 'sqlite';
+
+  // Attempt to initialize or reconnect
+  await initDatabase();
+
+  if (activeEngine === 'postgres' && pool) return 'postgres';
+  if (activeEngine === 'sqlite' && sqliteDb) return 'sqlite';
+
+  const detail = lastDbError ? `(${lastDbError})` : '(No DATABASE_URL set in environment)';
   throw new Error(
-    `Database is not connected (${lastDbError || 'no active engine'}). ` +
+    `Database is not connected ${detail}. ` +
     'Please set DATABASE_URL (PostgreSQL) in your Render environment variables.'
   );
 }
@@ -189,7 +197,7 @@ export async function initDatabase() {
 // ---------------------------------------------------------------------------
 
 export async function findUserByEmail(email) {
-  const engine = checkDbReady();
+  const engine = await checkDbReady();
   const normalizedEmail = email.trim().toLowerCase();
   if (engine === 'postgres') {
     const { rows } = await pool.query(
@@ -204,7 +212,7 @@ export async function findUserByEmail(email) {
 }
 
 export async function createUser({ id, name, email, passwordHash }) {
-  const engine = checkDbReady();
+  const engine = await checkDbReady();
   const normalizedEmail = email.trim().toLowerCase();
   if (engine === 'postgres') {
     await pool.query(
@@ -219,7 +227,7 @@ export async function createUser({ id, name, email, passwordHash }) {
 }
 
 export async function createSession({ token, userId, expiresAt }) {
-  const engine = checkDbReady();
+  const engine = await checkDbReady();
   if (engine === 'postgres') {
     await pool.query(
       'INSERT INTO sessions (token, user_id, expires_at) VALUES ($1, $2, $3)',
@@ -257,7 +265,7 @@ export async function getSessionUser(token) {
 }
 
 export async function deleteSession(token) {
-  const engine = checkDbReady();
+  const engine = await checkDbReady();
   if (engine === 'postgres') {
     await pool.query('DELETE FROM sessions WHERE token = $1', [token]);
     return;
@@ -285,7 +293,7 @@ export async function getUserProgress(userId) {
 }
 
 export async function saveUserProgress({ id, userId, subject, topic, score, total }) {
-  const engine = checkDbReady();
+  const engine = await checkDbReady();
   if (engine === 'postgres') {
     await pool.query(`
       INSERT INTO user_progress (id, user_id, subject, topic, score, total_questions, completed_at)

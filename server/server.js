@@ -371,7 +371,7 @@ app.get('/api/health', (_request, response) => {
   response.json({
     status: 'ok',
     mode: 'local-first',
-    database: db.getDatabaseInfo().type
+    database: db.getDatabaseInfo()
   });
 });
 

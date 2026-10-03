@@ -7,9 +7,30 @@ function canTryOnline() {
   return typeof navigator === 'undefined' || navigator.onLine !== false;
 }
 
-function localAnswer(question, options) {
+function getCurriculumRecords(options) {
+  if (Array.isArray(options?.records) && options.records.length > 0) {
+    return options.records;
+  }
+  if (typeof localStorage !== 'undefined') {
+    try {
+      const cached = localStorage.getItem('cached_curriculum_catalog');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed?.records) && parsed.records.length > 0) {
+          return parsed.records;
+        }
+      }
+    } catch {
+      // Ignore parse errors
+    }
+  }
+  return [];
+}
+
+function localAnswer(question, options = {}) {
+  const records = getCurriculumRecords(options);
   return {
-    answer: generateAiTutorResponse(question, options.subject, options.topic, options.records),
+    answer: generateAiTutorResponse(question, options.subject, options.topic, records),
     source: 'local',
     online: false
   };

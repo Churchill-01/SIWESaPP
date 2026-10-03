@@ -1,5 +1,5 @@
 // Cache identifier and static files required to start the app offline.
-const CACHE_NAME = 'bravoh-app-v14';
+const CACHE_NAME = 'bravoh-app-v15';
 const APP_SHELL = [
   './',
   './index.html',
@@ -52,11 +52,19 @@ self.addEventListener('fetch', (event) => {
         return response;
       })
       .catch(() => {
-        return caches.match(event.request).then((cached) => {
+        // If an API catalog request failed while offline, serve cached subjects.json
+        if (event.request.url.includes('/api/catalog')) {
+          return caches.match('./subjects.json', { ignoreSearch: true }).then((cached) => {
+            if (cached) return cached;
+            return caches.match('/subjects.json', { ignoreSearch: true });
+          });
+        }
+
+        return caches.match(event.request, { ignoreSearch: true }).then((cached) => {
           if (cached) return cached;
           // Only fallback to index.html for page navigation requests
           if (event.request.mode === 'navigate') {
-            return caches.match('./index.html');
+            return caches.match('./index.html', { ignoreSearch: true });
           }
           return new Response('Network error occurred', {
             status: 503,

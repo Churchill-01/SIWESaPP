@@ -11,19 +11,63 @@ const fallbackSubjects = [
   ['Biology', '10 topics', 'biology', 'leaf']
 ];
 
-// Offline fallback topics matching curriculum records
-const fallbackTopics = [
-  'Logic',
-  'Surds and Trigonometry',
-  'Matrices and Determinants',
-  'Linear and Quadratic Equations',
-  'Financial Mathematics',
-  'Longitude and Latitude',
-  'Coordinate Geometry',
-  'Construction and Loci',
-  'Differentiation',
-  'Integration'
-];
+// Offline fallback topics matching each specific subject curriculum
+const fallbackTopicsBySubject = {
+  Mathematics: [
+    'Logic',
+    'Surds and Trigonometry',
+    'Matrices and Determinants',
+    'Linear and Quadratic Equations',
+    'Financial Mathematics',
+    'Longitude and Latitude',
+    'Coordinate Geometry',
+    'Construction and Loci',
+    'Differentiation',
+    'Integration'
+  ],
+  Physics: [
+    'Energy Conversion and Machines',
+    'Waves',
+    'Electromagnetic Waves',
+    'Gravitational Field',
+    'Electric Fields and Circuits',
+    'Magnetism',
+    'Electromagnetic Induction',
+    'AC Circuits and Transformers',
+    'Atomic and Nuclear Physics',
+    'Energy Resources and Transmission'
+  ],
+  Chemistry: [
+    'Alkanoic Acids',
+    'Esters and Organic Reactions',
+    'Fats and Oils',
+    'Soaps and Detergents',
+    'Carbohydrates',
+    'Proteins and Amino Acids',
+    'Petroleum and Crude Oil',
+    'Metals and Alloys',
+    'Iron and Steel',
+    'Nuclear Chemistry and Industrial Chemistry'
+  ],
+  Biology: [
+    'Reproductive Behaviour in Animals',
+    'Genetics and Heredity',
+    'Genetics II',
+    'Variation',
+    'Evolution and Natural Selection',
+    'Ecology and Population',
+    'Ecosystems and Energy Flow',
+    'Homeostasis and Excretion',
+    'Nervous and Hormonal Coordination',
+    'Human Reproduction'
+  ]
+};
+
+function getTopicsForSubject(subject) {
+  const matched = [...new Set((state.subjectRecords || []).filter((record) => record.subject === subject).map((record) => record.topic))];
+  if (matched.length > 0) return matched;
+  return fallbackTopicsBySubject[subject] || [];
+}
 const prompts = ['Explain photosynthesis simply', 'How do I solve quadratic equations?', 'What is the difference between acids and bases?', 'What is a proposition in logic?'];
 // Navigation aliases and visual metadata used while rendering subjects.
 const screenAliases = { learn: 'subjects', quiz: 'quiz-subjects' };
@@ -180,27 +224,67 @@ function renderTopics(query = '') {
 
 function renderLesson() {
   // Fill the topic detail and lesson screens from the selected record.
-  const record = state.subjectRecords.find(
+  let record = (state.subjectRecords || []).find(
     (item) => item.subject === state.selectedSubject && item.topic === state.selectedTopic
   );
+
+  // If not in state, check cached catalog in localStorage
+  if (!record && typeof localStorage !== 'undefined') {
+    try {
+      const cached = localStorage.getItem('cached_curriculum_catalog');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed?.records)) {
+          record = parsed.records.find((item) => item.subject === state.selectedSubject && item.topic === state.selectedTopic);
+          if (record && (!state.subjectRecords || !state.subjectRecords.length)) {
+            state.subjectRecords = parsed.records;
+          }
+        }
+      }
+    } catch {}
+  }
 
   const topicDetailContainer = document.querySelector('#topic-detail-content');
   const lessonContainer = document.querySelector('#lesson-content');
 
   if (!record) {
-    if (topicDetailContainer) {
-      topicDetailContainer.innerHTML = `
-        <h1>${state.selectedTopic || 'Selected Topic'}</h1>
-        <p class="description">Loading topic materials for ${state.selectedSubject}...</p>
-        <div class="about-box" style="margin-top: 16px;">
-          <h2>TOPIC OVERVIEW</h2>
-          <p style="color: var(--text-secondary); margin-bottom: 12px;">Connecting to curriculum records...</p>
-          <button class="primary-button" data-screen-target="learning">Start learning</button>
-        </div>
-      `;
-    }
-    // Attempt on-demand fetch for this specific topic
-    if (state.selectedSubject && state.selectedTopic) {
+    // Generate an emergency syllabus lesson record so the page never freezes offline
+    record = {
+      subject: state.selectedSubject,
+      topic: state.selectedTopic,
+      subtopics: ['Core Definitions & Laws', 'Worked Examples & Method', 'Real-World Applications & Exam Focus'],
+      lesson: {
+        introduction: `Overview and essential syllabus requirements for ${state.selectedTopic} in ${state.selectedSubject}.`,
+        core_explanation: `${state.selectedTopic} is an essential part of the secondary school ${state.selectedSubject} curriculum. It establishes key concepts, analytical thinking, and problem-solving techniques for WAEC, NECO, and UTME examinations.\n\nReview the core definitions, study the worked example, and test your understanding with the practice questions.`,
+        key_points: [
+          `Key principle: Grasp the core definitions and principles of ${state.selectedTopic}`,
+          `Practical application: Apply the rules systematically to standard exam questions`,
+          `Concept mastery: Understand why these concepts matter in ${state.selectedSubject}`
+        ],
+        worked_example: {
+          problem: `State and describe the primary principle governing ${state.selectedTopic}.`,
+          step_by_step_solution: `1. Identify the given topic: ${state.selectedTopic} in ${state.selectedSubject}.\n2. Apply the fundamental definitions and standard formulas.\n3. Verify the conditions under which the principle holds true.`,
+          answer: `The foundational principles of ${state.selectedTopic} apply systematically under standard conditions.`
+        },
+        study_tip: `Always memorize the primary definition first, then solve at least 3 varied problems for ${state.selectedTopic}.`
+      },
+      practice_questions: [
+        {
+          question: `Which of the following is a primary objective in the study of ${state.selectedTopic}?`,
+          options: [
+            { label: `To understand and apply foundational principles of ${state.selectedTopic}`, is_correct: true },
+            { label: `To memorize formulas without contextual applications`, is_correct: false },
+            { label: `To apply concepts only under zero-condition limits`, is_correct: false },
+            { label: `To examine unrelated hypothetical theorems`, is_correct: false }
+          ],
+          answer: `To understand and apply foundational principles of ${state.selectedTopic}`,
+          explanation: `A primary objective is grasping the core principles and applying them accurately to problems in ${state.selectedTopic}.`
+        }
+      ]
+    };
+
+    // Attempt on-demand fetch for this specific topic if online
+    if (navigator.onLine && state.selectedSubject && state.selectedTopic) {
       requestJson(`/api/subjects/${encodeURIComponent(state.selectedSubject)}/topics/${encodeURIComponent(state.selectedTopic)}`)
         .then((fetchedRecord) => {
           if (fetchedRecord && fetchedRecord.topic) {
@@ -210,7 +294,6 @@ function renderLesson() {
         })
         .catch(() => {});
     }
-    return;
   }
 
   const lesson = record.lesson || {};
@@ -473,10 +556,55 @@ function renderQuizResult(selectedIndex) {
 
 function startQuiz() {
   // Reset quiz state, load, and prepare practice questions for the topic.
-  const record = state.subjectRecords.find((item) => (
+  let record = (state.subjectRecords || []).find((item) => (
     item.subject === state.selectedSubject && item.topic === state.selectedTopic
   ));
-  const rawQuestions = (record?.practice_questions || []).slice(0, 10);
+
+  // If not found in memory, try cached catalog in localStorage
+  if (!record && typeof localStorage !== 'undefined') {
+    try {
+      const cached = localStorage.getItem('cached_curriculum_catalog');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed?.records)) {
+          record = parsed.records.find((item) => item.subject === state.selectedSubject && item.topic === state.selectedTopic);
+          if (record && (!state.subjectRecords || !state.subjectRecords.length)) {
+            state.subjectRecords = parsed.records;
+          }
+        }
+      }
+    } catch {}
+  }
+
+  let rawQuestions = (record?.practice_questions || []).slice(0, 10);
+  if (!rawQuestions.length) {
+    // Generate fallback curriculum questions so students can always take a quiz offline
+    rawQuestions = [
+      {
+        question: `In ${state.selectedSubject}, what is the foundational rule studied under ${state.selectedTopic}?`,
+        options: [
+          { label: `It establishes the fundamental principles and laws governing ${state.selectedTopic}`, is_correct: true },
+          { label: `It is completely unrelated to the standard curriculum syllabus`, is_correct: false },
+          { label: `It applies exclusively under hypothetical zero conditions`, is_correct: false },
+          { label: `It contradicts established empirical and mathematical rules`, is_correct: false }
+        ],
+        answer: `It establishes the fundamental principles and laws governing ${state.selectedTopic}`,
+        explanation: `Mastering ${state.selectedTopic} begins with understanding its core principles and laws in ${state.selectedSubject}.`
+      },
+      {
+        question: `When solving problems involving ${state.selectedTopic}, what is the recommended procedure?`,
+        options: [
+          { label: `State the given values, apply the appropriate definition or formula, and verify units`, is_correct: true },
+          { label: `Guess the final answer without intermediate working`, is_correct: false },
+          { label: `Ignore standard units and notation`, is_correct: false },
+          { label: `Use random formulas from unrelated topics`, is_correct: false }
+        ],
+        answer: `State the given values, apply the appropriate definition or formula, and verify units`,
+        explanation: `Systematic problem-solving requires stating knowns, applying correct formulas, and checking units.`
+      }
+    ];
+  }
+
   state.quizQuestions = prepareQuizQuestions(rawQuestions, record);
   state.quizIndex = 0;
   state.quizScore = 0;

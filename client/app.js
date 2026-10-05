@@ -1280,6 +1280,19 @@ function renderQuizComplete() {
   if (score) score.textContent = `${state.quizScore}/${total}`;
   if (summary) summary.textContent = `You scored ${state.quizScore} out of ${total}.`;
 
+  // Always persist score locally so progress is not lost offline
+  try {
+    const localProgress = JSON.parse(localStorage.getItem('offline_quiz_progress') || '[]');
+    localProgress.push({
+      subject: state.selectedSubject,
+      topic: state.selectedTopic,
+      score: state.quizScore,
+      total,
+      date: new Date().toISOString()
+    });
+    localStorage.setItem('offline_quiz_progress', JSON.stringify(localProgress));
+  } catch {}
+
   // Persist score to server if user is logged in
   if (state.user && state.selectedSubject && state.selectedTopic && total > 0) {
     saveProgress(state.selectedSubject, state.selectedTopic, state.quizScore, total).catch(() => {});
@@ -1336,18 +1349,29 @@ function updateAuthUi() {
 }
 
 function applyCatalog(catalog) {
+  if (!catalog || !Array.isArray(catalog.records)) return;
   state.subjectRecords = catalog.records || [];
-  state.subjects = (catalog.subjects || []).map((name, index) => [
+  try {
+    localStorage.setItem('cached_curriculum_catalog', JSON.stringify(catalog));
+  } catch {}
+
+  const catalogSubjects = (catalog.subjects && catalog.subjects.length > 0)
+    ? catalog.subjects
+    : [...new Set(state.subjectRecords.map((r) => r.subject))];
+  const subjectsToUse = catalogSubjects.length ? catalogSubjects : ['Mathematics', 'Physics', 'Chemistry', 'Biology'];
+
+  state.subjects = subjectsToUse.map((name, index) => [
     name,
-    `${new Set(state.subjectRecords.filter((record) => record.subject === name).map((record) => record.topic)).size} topics`,
+    `${new Set(state.subjectRecords.filter((record) => record.subject === name).map((record) => record.topic)).size || (fallbackTopicsBySubject[name]?.length || 10)} topics`,
     subjectStyles[index % subjectStyles.length],
     subjectIcons[index % subjectIcons.length]
   ]);
-  state.topics = [...new Set(state.subjectRecords.filter((record) => record.subject === state.selectedSubject).map((record) => record.topic))];
-  if (state.topics.length === 0 && state.subjectRecords.length > 0) {
-    state.selectedSubject = state.subjectRecords[0].subject;
-    state.topics = [...new Set(state.subjectRecords.filter((record) => record.subject === state.selectedSubject).map((record) => record.topic))];
+
+  if (!state.selectedSubject || !subjectsToUse.includes(state.selectedSubject)) {
+    state.selectedSubject = subjectsToUse[0] || 'Mathematics';
   }
+
+  state.topics = getTopicsForSubject(state.selectedSubject);
   if (!state.topics.includes(state.selectedTopic) && state.topics.length > 0) {
     state.selectedTopic = state.topics[0];
   }
@@ -1356,6 +1380,17 @@ function applyCatalog(catalog) {
 }
 
 function loadCatalog() {
+  // First, instantly populate from localStorage if available (fastest offline startup)
+  try {
+    const cachedStr = localStorage.getItem('cached_curriculum_catalog');
+    if (cachedStr) {
+      const cached = JSON.parse(cachedStr);
+      if (cached && Array.isArray(cached.records) && cached.records.length > 0) {
+        applyCatalog(cached);
+      }
+    }
+  } catch {}
+
   // Load the live catalog, falling back to the cached catalog on failure.
   const catalogPath = `/api/catalog?t=${Date.now()}`;
 
@@ -1374,9 +1409,9 @@ function loadCatalog() {
 }
 
 function loadCachedCatalog() {
-  // Try local relative subjects.json first, then fallback to root /subjects.json
-  const fetchLocal = () => fetch(`./subjects.json?t=${Date.now()}`);
-  const fetchRoot = () => fetch(`/subjects.json?t=${Date.now()}`);
+  // Try local relative subjects.json first, then fallback to root /subjects.json without cache-busting query strings
+  const fetchLocal = () => fetch('./subjects.json');
+  const fetchRoot = () => fetch('/subjects.json');
 
   fetchLocal()
     .catch(fetchRoot)
@@ -1390,11 +1425,15 @@ function loadCachedCatalog() {
     })
     .catch((err) => {
       console.warn('[catalog] Could not load JSON catalog, using syllabus fallbacks:', err.message);
-      state.subjectRecords = [];
-      state.subjects = fallbackSubjects;
-      state.topics = fallbackTopics;
-      renderSubjects();
-      renderLesson();
+      if (!state.subjectRecords.length) {
+        state.subjects = fallbackSubjects;
+        state.topics = getTopicsForSubject(state.selectedSubject);
+        if (!state.topics.includes(state.selectedTopic) && state.topics.length > 0) {
+          state.selectedTopic = state.topics[0];
+        }
+        renderSubjects();
+        renderLesson();
+      }
     });
 }
 
@@ -1436,8 +1475,10 @@ function onRouteClick(event) {
 
   if (route.dataset.subject) {
     state.selectedSubject = route.dataset.subject;
-    state.topics = [...new Set(state.subjectRecords.filter((record) => record.subject === state.selectedSubject).map((record) => record.topic))];
-    if (!state.topics.length) state.topics = fallbackTopics;
+    state.topics = getTopicsForSubject(state.selectedSubject);
+    if (!state.topics.includes(state.selectedTopic) && state.topics.length > 0) {
+      state.selectedTopic = state.topics[0];
+    }
     renderTopics();
   }
 
@@ -1624,10 +1665,31 @@ function initializeApp() {
   }
 
   // Set initial state, register delegated events, and start data loading.
-  state.subjects = fallbackSubjects;
-  state.topics = fallbackTopics;
   state.selectedSubject = 'Mathematics';
-  state.selectedTopic = 'Logic';
+  state.topics = getTopicsForSubject(state.selectedSubject);
+  state.selectedTopic = state.topics[0] || 'Logic';
+  state.subjects = fallbackSubjects;
+
+  try {
+    const cachedStr = localStorage.getItem('cached_curriculum_catalog');
+    if (cachedStr) {
+      const cached = JSON.parse(cachedStr);
+      if (cached && Array.isArray(cached.records) && cached.records.length > 0) {
+        state.subjectRecords = cached.records;
+        const catalogSubjects = (cached.subjects && cached.subjects.length > 0)
+          ? cached.subjects
+          : [...new Set(cached.records.map((r) => r.subject))];
+        state.subjects = catalogSubjects.map((name, index) => [
+          name,
+          `${new Set(state.subjectRecords.filter((record) => record.subject === name).map((record) => record.topic)).size || (fallbackTopicsBySubject[name]?.length || 10)} topics`,
+          subjectStyles[index % subjectStyles.length],
+          subjectIcons[index % subjectIcons.length]
+        ]);
+        state.topics = getTopicsForSubject(state.selectedSubject);
+        state.selectedTopic = state.topics[0] || 'Logic';
+      }
+    }
+  } catch {}
 
   renderSubjects();
   renderPromptList();
@@ -1698,13 +1760,16 @@ function initializeApp() {
       .then((data) => {
         state.userProgress = data?.progress || [];
       })
-      .catch(() => {
-        // If session expired or invalid on server, clear credentials
-        clearAuth();
-        state.authToken = null;
-        state.user = null;
-        state.userProgress = [];
-        updateAuthUi();
+      .catch((err) => {
+        // Only clear credentials if we are online and server returned 401 Unauthorized
+        const msg = String(err?.message || '').toLowerCase();
+        if (navigator.onLine && (msg.includes('401') || msg.includes('unauthorized') || msg.includes('invalid token') || msg.includes('token expired'))) {
+          clearAuth();
+          state.authToken = null;
+          state.user = null;
+          state.userProgress = [];
+          updateAuthUi();
+        }
       });
   } else {
     updateAuthUi();
